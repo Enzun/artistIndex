@@ -26,14 +26,14 @@ jobs:
         run: npm ci
 
       - name: Fetch YouTube view counts
-        run: npm run fetch
+        run: npx tsx scripts/fetch_views.ts
         env:
           YOUTUBE_API_KEY:           ${{ secrets.YOUTUBE_API_KEY }}
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Calculate indices
-        run: npm run calc
+        run: npx tsx scripts/calc_index.ts
         env:
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
