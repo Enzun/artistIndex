@@ -1,0 +1,39 @@
+name: Daily Artist Index Update
+
+on:
+  schedule:
+    # 毎日 00:05 JST = 15:05 UTC
+    - cron: '5 15 * * *'
+  workflow_dispatch:
+    # GitHub の Actions 画面から手動実行可能（初回テスト用）
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch YouTube view counts
+        run: npm run fetch
+        env:
+          YOUTUBE_API_KEY:           ${{ secrets.YOUTUBE_API_KEY }}
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Calculate indices
+        run: npm run calc
+        env:
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

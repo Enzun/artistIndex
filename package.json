@@ -1,0 +1,20 @@
+{
+  "name": "artist-index",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch":      "tsx --env-file=.env scripts/fetch_views.ts",
+    "calc":       "tsx --env-file=.env scripts/calc_index.ts",
+    "update":     "tsx --env-file=.env scripts/fetch_views.ts && tsx --env-file=.env scripts/calc_index.ts",
+    "add-artist": "tsx --env-file=.env scripts/add_artist.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

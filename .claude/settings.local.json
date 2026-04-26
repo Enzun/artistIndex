@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(CHANNEL_ID=UCpFgmZm65yOU5X-hmWkWjuw ARTIST_NAME=\"Mrs. GREEN APPLE\" npm run add-artist)",
+      "Bash(echo \"EXIT:$?\")"
+    ]
+  }
+}

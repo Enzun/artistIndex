@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アーティスト指数シミュレーター</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --dim: #8b949e;
+      --mga: #4ade80;
+      --sambo: #60a5fa;
+      --mga-d: #86efac;
+      --sambo-d: #93c5fd;
+      --mga-w: #d4a017;
+      --sambo-w: #c084fc;
+      --accent: #f78166;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    .app { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+    header { text-align: center; margin-bottom: 28px; }
+    header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    header p { color: var(--dim); font-size: 13px; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px 18px;
+    }
+    .stat.mga  { border-left: 3px solid var(--mga); }
+    .stat.sambo{ border-left: 3px solid var(--sambo); }
+    .stat-name { font-size: 12px; color: var(--dim); margin-bottom: 2px; }
+    .stat-main { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stat.mga  .stat-main  { color: var(--mga); }
+    .stat.sambo .stat-main { color: var(--sambo); }
+    .stat-rows { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+    .stat-row  { font-size: 11px; display: flex; gap: 6px; align-items: center; }
+    .stat-row .badge {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    }
+    .stat-row .val { font-weight: 600; color: var(--text); }
+    .stat-row .lbl { color: var(--dim); }
+
+    /* Panel */
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px 20px; margin-bottom: 16px;
+    }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+    }
+    .panel-title { font-size: 13px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+    .toggle-label { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .toggle-label input { cursor: pointer; accent-color: var(--accent); }
+
+    /* Controls */
+    .controls-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
+      margin-bottom: 14px;
+    }
+    .ctrl label { display: block; font-size: 12px; color: var(--dim); margin-bottom: 5px; }
+    .ctrl label span { color: var(--text); font-weight: 600; }
+    .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+    .ctrl select {
+      width: 100%; padding: 6px 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); font-size: 13px;
+    }
+    .formula-box {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 10px 14px;
+      font-family: 'Courier New', monospace; font-size: 13px; color: #ffa657;
+      margin-bottom: 14px;
+    }
+
+    /* Compare section */
+    .compare-section {
+      border-top: 1px solid var(--border); padding-top: 14px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    }
+    .compare-block { display: flex; flex-direction: column; gap: 8px; }
+    .compare-toggle {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .compare-toggle input { cursor: pointer; accent-color: var(--accent); }
+    .compare-dot {
+      display: inline-block; width: 24px; height: 3px; border-radius: 1px;
+    }
+    .compare-dot.dashed {
+      background: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 10px);
+    }
+    .compare-dot.dotted {
+      background: repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 7px);
+    }
+    .sub-ctrl { display: flex; flex-direction: column; gap: 4px; }
+    .sub-ctrl span { font-size: 12px; color: var(--dim); }
+    .sub-ctrl span strong { color: var(--text); }
+    .sub-ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+    .hidden { display: none !important; }
+    .compare-note {
+      font-size: 11px; color: var(--dim); line-height: 1.5;
+      padding: 6px 10px; background: var(--surface2);
+      border-radius: 4px; border-left: 2px solid var(--border);
+    }
+
+    /* Events */
+    .events-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px;
+    }
+    .event {
+      display: flex; gap: 8px; align-items: flex-start;
+      background: var(--surface2); border-radius: 4px; padding: 8px 10px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .dot.mga   { background: var(--mga); }
+    .dot.sambo { background: var(--sambo); }
+    .event-date { font-size: 11px; color: var(--dim); white-space: nowrap; }
+    .event-text { font-size: 12px; }
+    .event-who  { font-size: 11px; color: var(--dim); }
+
+    .note { font-size: 11px; color: var(--dim); text-align: center; margin-top: 8px; }
+
+    @media (max-width: 600px) {
+      .stats, .compare-section { grid-template-columns: 1fr; }
+      .stat-main { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>アーティスト指数シミュレーター</h1>
+    <p>推定YouTubeデータ（2015年1月〜2024年12月）をもとに指数計算式を試行錯誤するツール</p>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat mga">
+      <div class="stat-name">Mrs. GREEN APPLE</div>
+      <div class="stat-main" id="mga-main">—</div>
+      <div class="stat-rows" id="mga-rows"></div>
+    </div>
+    <div class="stat sambo">
+      <div class="stat-name">サンボマスター</div>
+      <div class="stat-main" id="sambo-main">—</div>
+      <div class="stat-rows" id="sambo-rows"></div>
+    </div>
+  </div>
+
+  <!-- Index chart -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">指数の推移</span>
+      <label class="toggle-label"><input type="checkbox" id="log-idx"> 対数スケール</label>
+    </div>
+    <canvas id="idxChart" height="115"></canvas>
+  </div>
+
+  <!-- Views chart -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">推定日平均再生数（万回/日）</span>
+      <label class="toggle-label"><input type="checkbox" id="log-views" checked> 対数スケール</label>
+    </div>
+    <canvas id="viewsChart" height="70"></canvas>
+  </div>
+
+  <!-- Controls -->
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">計算式パラメーター</span></div>
+
+    <div class="controls-grid">
+      <div class="ctrl">
+        <label>計算式</label>
+        <select id="ftype">
+          <option value="mult">乗算型（複利）</option>
+          <option value="log">対数加算型</option>
+          <option value="linear">線形加算型</option>
+          <option value="sqrt">平方根加算型</option>
+        </select>
+      </div>
+      <div class="ctrl" id="baseline-ctrl">
+        <label>ベースライン（日再生数）: <span id="b-val">10,000</span> 回</label>
+        <input type="range" id="baseline" min="1000" max="100000" step="1000" value="10000">
+      </div>
+      <div class="ctrl">
+        <label>感度係数 k: <span id="k-val">0.50</span></label>
+        <input type="range" id="kslider" min="0.01" max="3" step="0.01" value="0.50">
+      </div>
+      <div class="ctrl">
+        <label>初期指数: <span id="init-val">100</span></label>
+        <input type="range" id="initidx" min="10" max="1000" step="10" value="100">
+      </div>
+    </div>
+
+    <div class="formula-box" id="fbox"></div>
+
+    <!-- Comparison section -->
+    <div class="compare-section">
+
+      <!-- Dynamic baseline -->
+      <div class="compare-block">
+        <label class="compare-toggle">
+          <input type="checkbox" id="show-dynamic">
+          <span style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--mga-d)">━ ━</span>/<span style="color:var(--sambo-d)">━ ━</span>
+            動的ベースライン
+          </span>
+        </label>
+        <div class="compare-note">
+          固定値の代わりに<strong>アーティスト自身の過去N月平均</strong>を基準とする。
+          自分の平均より多い日は上昇、少ない日は下降。
+        </div>
+        <div class="sub-ctrl hidden" id="dynamic-ctrl">
+          <span>参照期間: <strong id="hist-val">3</strong> ヶ月</span>
+          <input type="range" id="hist-months" min="1" max="12" step="1" value="3">
+        </div>
+      </div>
+
+      <!-- Window hours -->
+      <div class="compare-block">
+        <label class="compare-toggle">
+          <input type="checkbox" id="show-window">
+          <span style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--mga-w)">···</span>/<span style="color:var(--sambo-w)">···</span>
+            時間ウィンドウ
+          </span>
+        </label>
+        <div class="compare-note">
+          <strong>〇時間の累積再生数</strong>をもとに指数を計算。短いほど時間帯のノイズが増し、
+          深夜に下がり夜に上がる日内変動が指数に影響する。
+        </div>
+        <div class="sub-ctrl hidden" id="window-ctrl">
+          <span>ウィンドウ: <strong id="win-val">6</strong> 時間</span>
+          <input type="range" id="win-hours" min="1" max="48" step="1" value="6">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);margin-top:4px;cursor:pointer">
+            <input type="checkbox" id="win-dynamic" style="cursor:pointer;accent-color:var(--accent)">
+            動的ベースラインで計算（固定Bとの差を比較できる）
+          </label>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Events -->
+  <div class="panel">
+    <div class="panel-header"><span class="panel-title">主要イベント</span></div>
+    <div class="events-grid" id="evlist"></div>
+  </div>
+
+  <p class="note">※ 再生数データは公開情報をもとにした推定値。時間ウィンドウの影響はシミュレーションによる近似。</p>
+</div>
+
+<script>
+// =====================================================================
+// データ（月別新規再生数、単位：万回）2015年1月〜2024年12月
+// =====================================================================
+const MGA = [
+  50,50,50,55,60,60,65,65,65,70,70,80,
+  80,90,95,100,105,250,155,120,110,100,100,145,
+  195,200,215,300,255,255,230,200,250,300,250,250,
+  300,280,295,300,300,300,300,280,295,500,400,350,
+  350,300,350,350,350,350,600,200,150,150,150,200,
+  180,170,180,180,190,200,220,220,220,230,240,260,
+  250,250,500,450,400,350,350,350,350,400,450,450,
+  500,450,500,550,550,600,650,700,800,900,10000,6000,
+  5000,4500,4500,25000,20000,15000,10000,8000,7000,6500,6500,6000,
+  8500,8000,8500,10500,10500,10000,10000,10000,10500,10500,11500,12500,
+];
+
+const SAMBO = [
+  150,150,165,170,170,180,170,165,165,170,175,200,
+  158,148,158,148,150,150,148,148,148,150,150,178,
+  158,160,168,170,170,170,168,168,168,180,180,200,
+  180,168,178,180,180,188,188,188,188,200,200,200,
+  200,188,198,350,295,248,228,208,208,208,228,238,
+  218,198,198,198,198,198,198,198,198,198,198,198,
+  218,218,228,228,228,228,238,238,238,248,248,278,
+  248,248,248,248,268,268,268,268,268,268,348,328,
+  298,278,288,348,318,298,298,298,298,298,298,348,
+  278,268,268,278,268,258,258,258,268,268,278,308,
+];
+
+const EVENTS = [
+  { ym:'2016-06', label:'メジャーデビュー「Speaking」', artist:'mga' },
+  { ym:'2017-04', label:'1stアルバムリリース', artist:'mga' },
+  { ym:'2018-10', label:'アルバム「Neo Seoul」リリース', artist:'mga' },
+  { ym:'2019-04', label:'NHKドラマ「いだてん」主題歌', artist:'sambo' },
+  { ym:'2019-07', label:'活動休止発表', artist:'mga' },
+  { ym:'2021-03', label:'再始動・新体制発表', artist:'mga' },
+  { ym:'2022-11', label:'「Magic」FIFAワールドカップ公式曲', artist:'mga' },
+  { ym:'2023-04', label:'「Ao no Sumika」推しの子OP（爆発的拡散）', artist:'mga' },
+  { ym:'2023-07', label:'「ダンスホール」リリース', artist:'mga' },
+  { ym:'2024-01', label:'「ニュー・マイ・ノーマル」アルバム', artist:'mga' },
+];
+
+// =====================================================================
+// Utility
+// =====================================================================
+function daysInMonth(idx) {
+  return new Date(2015 + Math.floor(idx / 12), idx % 12 + 1, 0).getDate();
+}
+
+function makeFullLabels() {
+  const out = [];
+  for (let y = 2015; y <= 2024; y++)
+    for (let m = 1; m <= 12; m++)
+      out.push(`${y}-${String(m).padStart(2,'0')}`);
+  return out;
+}
+const FULL_LABELS = makeFullLabels();
+
+// =====================================================================
+// Index computation helpers
+// =====================================================================
+function calcNewIndex(idx, dailyViews, baseline, formula, k, n) {
+  const r = Math.max(dailyViews / baseline, 1e-6);
+  switch (formula) {
+    case 'mult':   return idx * Math.pow(r, k * n / 365);
+    case 'log':    return idx + Math.log2(r) * k * n;
+    case 'linear': return idx + (r - 1) * k * n;
+    case 'sqrt': {
+      const delta = (Math.sqrt(dailyViews) - Math.sqrt(baseline)) / Math.sqrt(baseline) * k * n;
+      return idx + delta;
+    }
+  }
+}
+
+/** 固定ベースライン */
+function computeIndex(data, formula, k, init, baseline) {
+  let idx = init;
+  return data.map((v, i) => {
+    const n = daysInMonth(i);
+    idx = Math.max(calcNewIndex(idx, v * 10000 / n, baseline, formula, k, n), 0.01);
+    return Math.round(idx * 100) / 100;
+  });
+}
+
+/** 動的ベースライン（過去 histMonths ヶ月の自分の平均） */
+function computeIndexDynamic(data, formula, k, init, histMonths) {
+  let idx = init;
+  return data.map((v, i) => {
+    const n = daysInMonth(i);
+    const d = v * 10000 / n;
+
+    const hStart = Math.max(0, i - histMonths);
+    const hist = data.slice(hStart, i);
+    let baseline;
+    if (hist.length === 0) {
+      baseline = d; // 初月は変化なし
+    } else {
+      const totV = hist.reduce((s, x) => s + x, 0);
+      const totD = hist.reduce((s, _, j) => s + daysInMonth(hStart + j), 0);
+      baseline = totV * 10000 / totD;
+    }
+
+    idx = Math.max(calcNewIndex(idx, d, baseline, formula, k, n), 0.01);
+    return Math.round(idx * 100) / 100;
+  });
+}
+
+// =====================================================================
+// Window noise simulation
+// =====================================================================
+// 短い時間ウィンドウで計測するとどうなるか: log-normal ノイズで近似
+// (24h → ノイズなし, 1h → 大きいノイズ)
+function lcg(seed) {
+  let s = (seed | 0) >>> 0;
+  return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 0x100000000; };
+}
+function addWindowNoise(data, windowHours, seed = 42) {
+  if (windowHours >= 24) return [...data];
+  const rand = lcg(seed);
+  // 標準偏差: 1時間 → ~0.9, 6時間 → ~0.5, 12時間 → ~0.3
+  const noiseStd = 0.32 * Math.log(24 / windowHours);
+  return data.map(v => {
+    const u1 = Math.max(rand(), 1e-10), u2 = rand();
+    const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    return Math.max(v * Math.exp(z * noiseStd), 0.01);
+  });
+}
+
+// =====================================================================
+// Chart setup
+// =====================================================================
+const commonX = {
+  ticks: {
+    color: '#8b949e', font: { size: 11 }, maxRotation: 0,
+    callback(_, i) { return i % 12 === 0 ? FULL_LABELS[i].slice(0, 4) : null; },
+  },
+  grid: { color: '#21262d' },
+};
+const commonY = { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: '#21262d' } };
+const commonTip = {
+  backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1,
+  titleColor: '#c9d1d9', bodyColor: '#8b949e',
+};
+
+const idxChart = new Chart(document.getElementById('idxChart'), {
+  type: 'line',
+  data: {
+    labels: FULL_LABELS,
+    datasets: [
+      // 0,1: 固定ベースライン（solid）
+      { label: 'MGA（固定B）',   data: [], borderColor: '#4ade80', borderWidth: 2, borderDash: [],       pointRadius: 0, tension: 0.3, fill: false, hidden: false },
+      { label: 'Sambo（固定B）', data: [], borderColor: '#60a5fa', borderWidth: 2, borderDash: [],       pointRadius: 0, tension: 0.3, fill: false, hidden: false },
+      // 2,3: 動的ベースライン（dashed）
+      { label: 'MGA（動的B）',   data: [], borderColor: '#86efac', borderWidth: 1.5, borderDash: [6,3], pointRadius: 0, tension: 0.3, fill: false, hidden: true },
+      { label: 'Sambo（動的B）', data: [], borderColor: '#93c5fd', borderWidth: 1.5, borderDash: [6,3], pointRadius: 0, tension: 0.3, fill: false, hidden: true },
+      // 4,5: 時間ウィンドウ（dotted）
+      { label: 'MGA（6h窓）',   data: [], borderColor: '#d4a017', borderWidth: 1.5, borderDash: [2,4], pointRadius: 0, tension: 0.3, fill: false, hidden: true },
+      { label: 'Sambo（6h窓）', data: [], borderColor: '#c084fc', borderWidth: 1.5, borderDash: [2,4], pointRadius: 0, tension: 0.3, fill: false, hidden: true },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { color: '#8b949e', font: { size: 11 }, boxWidth: 24 } },
+      tooltip: {
+        ...commonTip,
+        callbacks: {
+          label: c => c.dataset.hidden ? null :
+            `${c.dataset.label}: ${c.parsed.y.toLocaleString(undefined, { maximumFractionDigits: 1 })}`,
+        },
+      },
+    },
+    scales: {
+      x: commonX,
+      y: { ...commonY, type: 'linear', ticks: { ...commonY.ticks, callback: v => v.toLocaleString() } },
+    },
+  },
+});
+
+const viewsChart = new Chart(document.getElementById('viewsChart'), {
+  type: 'line',
+  data: {
+    labels: FULL_LABELS,
+    datasets: [
+      { label: 'Mrs. GREEN APPLE', data: MGA.map((v,i) => Math.round(v/daysInMonth(i)*10)/10), borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.05)', borderWidth:1.5, pointRadius:0, tension:.2, fill:true },
+      { label: 'サンボマスター',   data: SAMBO.map((v,i) => Math.round(v/daysInMonth(i)*10)/10), borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.05)', borderWidth:1.5, pointRadius:0, tension:.2, fill:true },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position:'top', labels:{ color:'#8b949e', font:{size:12} } },
+      tooltip: { ...commonTip, callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y.toLocaleString()} 万回/日` } },
+    },
+    scales: {
+      x: commonX,
+      y: { ...commonY, type:'logarithmic', ticks:{ ...commonY.ticks, callback: v => v>=1000?`${(v/1000).toFixed(0)}K`:v } },
+    },
+  },
+});
+
+// =====================================================================
+// Formula display
+// =====================================================================
+const FORMULA_TEXT = {
+  mult:   (b,k) => `index[t+1] = index[t] × (d / ${b.toLocaleString()})^(${k} × n / 365)    ← d=日再生数, B=ベースライン, n=日数`,
+  log:    (b,k) => `index[t+1] = index[t] + log₂(d / ${b.toLocaleString()}) × ${k} × n`,
+  linear: (b,k) => `index[t+1] = index[t] + (d / ${b.toLocaleString()} − 1) × ${k} × n`,
+  sqrt:   (b,k) => `index[t+1] = index[t] + (√d − √${b.toLocaleString()}) / √${b.toLocaleString()} × ${k} × n`,
+};
+
+const K_CFG = {
+  mult:   { min:0.01,   max:3,     step:0.01,   def:0.5  },
+  log:    { min:0.01,   max:3,     step:0.01,   def:0.3  },
+  linear: { min:0.0001, max:0.005, step:0.0001, def:0.001},
+  sqrt:   { min:0.001,  max:0.5,   step:0.001,  def:0.05 },
+};
+
+function fmtK(v) {
+  if (v >= 1)    return v.toFixed(2);
+  if (v >= 0.1)  return v.toFixed(3);
+  if (v >= 0.01) return v.toFixed(4);
+  return v.toFixed(5);
+}
+function fmtIdx(v) {
+  return v >= 10000 ? `${(v/10000).toFixed(1)}万`
+       : v >= 1000  ? v.toLocaleString(undefined,{maximumFractionDigits:0})
+       : v.toFixed(1);
+}
+
+// =====================================================================
+// Stats update
+// =====================================================================
+function setStatRows(elId, rows) {
+  const el = document.getElementById(elId);
+  el.innerHTML = rows.map(r =>
+    `<div class="stat-row">
+      <span class="badge" style="background:${r.color};${r.dashed?'border-radius:0;height:2px;':''}"></span>
+      <span class="val">${r.val}</span>
+      <span class="lbl">${r.lbl}</span>
+    </div>`
+  ).join('');
+}
+
+// =====================================================================
+// Main update
+// =====================================================================
+function update() {
+  const formula  = document.getElementById('ftype').value;
+  const baseline = parseInt(document.getElementById('baseline').value);
+  const k        = parseFloat(document.getElementById('kslider').value);
+  const init     = parseInt(document.getElementById('initidx').value);
+  const showDyn  = document.getElementById('show-dynamic').checked;
+  const showWin  = document.getElementById('show-window').checked;
+  const histMo   = parseInt(document.getElementById('hist-months').value);
+  const winHours = parseInt(document.getElementById('win-hours').value);
+
+  // Fixed baseline
+  const mgaFix   = computeIndex(MGA,   formula, k, init, baseline);
+  const samboFix = computeIndex(SAMBO, formula, k, init, baseline);
+
+  // Dynamic baseline
+  const mgaDyn   = showDyn ? computeIndexDynamic(MGA,   formula, k, init, histMo) : [];
+  const samboDyn = showDyn ? computeIndexDynamic(SAMBO, formula, k, init, histMo) : [];
+
+  // Window noise
+  const winDynamic   = document.getElementById('win-dynamic').checked;
+  const mgaWinData   = showWin ? addWindowNoise(MGA,   winHours, 42)  : [];
+  const samboWinData = showWin ? addWindowNoise(SAMBO, winHours, 137) : [];
+  const mgaWin   = showWin
+    ? (winDynamic ? computeIndexDynamic(mgaWinData,   formula, k, init, histMo)
+                  : computeIndex(mgaWinData,   formula, k, init, baseline)) : [];
+  const samboWin = showWin
+    ? (winDynamic ? computeIndexDynamic(samboWinData, formula, k, init, histMo)
+                  : computeIndex(samboWinData, formula, k, init, baseline)) : [];
+
+  // Update datasets
+  idxChart.data.datasets[0].data = mgaFix;
+  idxChart.data.datasets[1].data = samboFix;
+  idxChart.data.datasets[2].data = mgaDyn;
+  idxChart.data.datasets[3].data = samboDyn;
+  idxChart.data.datasets[4].data = mgaWin;
+  idxChart.data.datasets[5].data = samboWin;
+
+  idxChart.data.datasets[2].hidden = !showDyn;
+  idxChart.data.datasets[3].hidden = !showDyn;
+  idxChart.data.datasets[4].hidden = !showWin;
+  idxChart.data.datasets[5].hidden = !showWin;
+
+  // Update window dataset labels
+  const winDynLabel = document.getElementById('win-dynamic').checked ? '+動的B' : '';
+  const winLabel = `${winHours}h窓${winDynLabel}`;
+  idxChart.data.datasets[4].label = `MGA（${winLabel}）`;
+  idxChart.data.datasets[5].label = `Sambo（${winLabel}）`;
+
+  // Log scale toggle
+  const logIdx = document.getElementById('log-idx').checked;
+  idxChart.options.scales.y.type = logIdx ? 'logarithmic' : 'linear';
+  idxChart.options.scales.y.ticks.callback = logIdx
+    ? v => v>=1e6?`${(v/1e6).toFixed(1)}M`:v>=1000?`${(v/1000).toFixed(0)}K`:v
+    : v => v.toLocaleString();
+
+  idxChart.update('none');
+
+  // Formula text
+  document.getElementById('fbox').textContent = FORMULA_TEXT[formula](baseline, k);
+
+  // Stats
+  const mgaLast   = mgaFix[mgaFix.length-1];
+  const samboLast = samboFix[samboFix.length-1];
+  document.getElementById('mga-main').textContent   = fmtIdx(mgaLast);
+  document.getElementById('sambo-main').textContent = fmtIdx(samboLast);
+
+  const mga_rows = [{ color:'#4ade80', val:fmtIdx(mgaLast),  lbl:'固定B' }];
+  const sambo_rows = [{ color:'#60a5fa', val:fmtIdx(samboLast), lbl:'固定B' }];
+
+  if (showDyn && mgaDyn.length) {
+    mga_rows.push({ color:'#86efac', val:fmtIdx(mgaDyn[mgaDyn.length-1]), lbl:`動的B（${histMo}ヶ月）` });
+    sambo_rows.push({ color:'#93c5fd', val:fmtIdx(samboDyn[samboDyn.length-1]), lbl:`動的B（${histMo}ヶ月）` });
+  }
+  if (showWin && mgaWin.length) {
+    mga_rows.push({ color:'#d4a017', val:fmtIdx(mgaWin[mgaWin.length-1]),   lbl:`${winHours}h窓` });
+    sambo_rows.push({ color:'#c084fc', val:fmtIdx(samboWin[samboWin.length-1]), lbl:`${winHours}h窓` });
+  }
+
+  setStatRows('mga-rows', mga_rows);
+  setStatRows('sambo-rows', sambo_rows);
+}
+
+function updateViews() {
+  const log = document.getElementById('log-views').checked;
+  viewsChart.options.scales.y.type = log ? 'logarithmic' : 'linear';
+  viewsChart.update('none');
+}
+
+// =====================================================================
+// Event listeners
+// =====================================================================
+document.getElementById('ftype').addEventListener('change', () => {
+  const f = document.getElementById('ftype').value;
+  const cfg = K_CFG[f];
+  const sl = document.getElementById('kslider');
+  sl.min = cfg.min; sl.max = cfg.max; sl.step = cfg.step; sl.value = cfg.def;
+  document.getElementById('k-val').textContent = fmtK(cfg.def);
+  update();
+});
+
+document.getElementById('baseline').addEventListener('input', e => {
+  document.getElementById('b-val').textContent = parseInt(e.target.value).toLocaleString();
+  update();
+});
+document.getElementById('kslider').addEventListener('input', e => {
+  document.getElementById('k-val').textContent = fmtK(parseFloat(e.target.value));
+  update();
+});
+document.getElementById('initidx').addEventListener('input', e => {
+  document.getElementById('init-val').textContent = e.target.value;
+  update();
+});
+document.getElementById('log-idx').addEventListener('change', update);
+document.getElementById('log-views').addEventListener('change', updateViews);
+
+// Compare: dynamic baseline
+document.getElementById('show-dynamic').addEventListener('change', e => {
+  document.getElementById('dynamic-ctrl').classList.toggle('hidden', !e.target.checked);
+  update();
+});
+document.getElementById('hist-months').addEventListener('input', e => {
+  document.getElementById('hist-val').textContent = e.target.value;
+  update();
+});
+
+// Compare: window hours
+document.getElementById('show-window').addEventListener('change', e => {
+  document.getElementById('window-ctrl').classList.toggle('hidden', !e.target.checked);
+  update();
+});
+document.getElementById('win-hours').addEventListener('input', e => {
+  document.getElementById('win-val').textContent = e.target.value;
+  update();
+});
+document.getElementById('win-dynamic').addEventListener('change', update);
+
+// =====================================================================
+// Events list
+// =====================================================================
+const evlist = document.getElementById('evlist');
+EVENTS.forEach(ev => {
+  const d = document.createElement('div');
+  d.className = 'event';
+  d.innerHTML = `
+    <div class="dot ${ev.artist}"></div>
+    <div>
+      <div class="event-date">${ev.ym}</div>
+      <div class="event-text">${ev.label}</div>
+      <div class="event-who">${ev.artist === 'mga' ? 'Mrs. GREEN APPLE' : 'サンボマスター'}</div>
+    </div>`;
+  evlist.appendChild(d);
+});
+
+// =====================================================================
+// Init
+// =====================================================================
+update();
+</script>
+</body>
+</html>
