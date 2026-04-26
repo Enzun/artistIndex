@@ -27,5 +27,5 @@ export async function POST(request: NextRequest) {
 
   // redirect back to referrer or portfolio
   const referer = request.headers.get('referer') ?? '/portfolio'
-  return NextResponse.redirect(new URL(referer, request.url))
+  return NextResponse.redirect(new URL(referer, request.url), { status: 303 })
 }

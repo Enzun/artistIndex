@@ -55,7 +55,7 @@ export default async function HomePage() {
               <div className="bg-surface border border-border rounded-xl p-5 hover:border-dim transition-colors flex items-center justify-between">
                 <div>
                   <p className="text-sm text-dim mb-1">{artist.name}</p>
-                  <p className="text-3xl font-bold tabular-nums">{artist.current_index.toFixed(1)}</p>
+                  <p className="text-3xl font-bold tabular-nums">{Math.floor(artist.current_index)}</p>
                   {changePct !== null && (
                     <p className={`text-xs mt-1 ${changePct >= 0 ? 'text-mga' : 'text-accent'}`}>
                       {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% (前日比)

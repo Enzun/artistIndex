@@ -54,7 +54,7 @@ export default async function ArtistPage({
   const { data: { user } } = await supabase.auth.getUser()
 
   let userProfile = null
-  let activeInvestment: Investment | null = null
+  let activeInvestments: Investment[] = []
 
   if (user) {
     const { data: profile } = await supabase
@@ -64,82 +64,82 @@ export default async function ArtistPage({
       .single()
     userProfile = profile
 
-    const { data: inv } = await supabase
+    const { data: invList } = await supabase
       .from('investments')
       .select('*')
       .eq('user_id', user.id)
       .eq('artist_id', id)
       .eq('status', 'active')
-      .maybeSingle()
-    activeInvestment = inv
+      .order('created_at', { ascending: false })
+    activeInvestments = (invList ?? []) as Investment[]
   }
 
-  const currentIndex = artist.current_index as number
-  const returnPts = activeInvestment
-    ? Math.round(activeInvestment.points_invested * (currentIndex / activeInvestment.index_at_entry))
-    : null
+  const currentIndex = Math.floor(artist.current_index as number)
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">{artist.name}</h1>
       <p className="text-5xl font-bold tabular-nums text-mga mb-6 mt-3">
-        {currentIndex.toFixed(1)}
+        {currentIndex}
       </p>
 
       <IndexChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
 
       {user ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* 所持ポイント・投入フォーム */}
+        <div className="flex flex-col gap-4">
+          {/* 所持ポイント・購入フォーム */}
           <div className="bg-surface border border-border rounded-xl p-5">
-            <p className="text-xs text-dim mb-3">所持ポイント</p>
+            <p className="text-xs text-dim mb-1">所持ポイント</p>
             <p className="text-2xl font-bold tabular-nums mb-4">
               {userProfile?.free_points.toLocaleString() ?? 0} pt
             </p>
-            {!activeInvestment && (
-              <InvestForm artistId={id} currentIndex={currentIndex} />
-            )}
-            {activeInvestment && (
-              <p className="text-xs text-dim">このアーティストに投入中のため追加投入不可</p>
-            )}
+            <InvestForm artistId={id} currentIndex={artist.current_index as number} />
           </div>
 
-          {/* 現在の投入状況 */}
-          {activeInvestment && returnPts !== null && (
-            <div className="bg-surface border border-border rounded-xl p-5">
-              <p className="text-xs text-dim mb-3">現在の投入状況</p>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-dim">投入時指数</span>
-                <span>{activeInvestment.index_at_entry.toFixed(1)}</span>
-              </div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-dim">投入ポイント</span>
-                <span>{activeInvestment.points_invested.toLocaleString()} pt</span>
-              </div>
-              <div className="flex justify-between text-sm mb-3">
-                <span className="text-dim">現在の価値</span>
-                <span className={returnPts >= activeInvestment.points_invested ? 'text-mga' : 'text-accent'}>
-                  {returnPts.toLocaleString()} pt
-                  {' '}
-                  ({returnPts >= activeInvestment.points_invested ? '+' : ''}
-                  {((returnPts / activeInvestment.points_invested - 1) * 100).toFixed(1)}%)
-                </span>
-              </div>
-              <form action="/api/withdraw" method="post">
-                <input type="hidden" name="investment_id" value={activeInvestment.id} />
-                <button
-                  type="submit"
-                  className="w-full bg-surface2 border border-border rounded-lg py-2 text-sm font-medium hover:border-dim transition-colors"
-                >
-                  回収する（{returnPts.toLocaleString()} pt）
-                </button>
-              </form>
+          {/* 保有カード一覧 */}
+          {activeInvestments.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-dim px-1">保有カード</p>
+              {activeInvestments.map((inv) => {
+                const entryIndex = Math.floor(inv.index_at_entry)
+                const shares = Math.round(inv.points_invested / inv.index_at_entry)
+                const returnPts = Math.round(inv.points_invested * (currentIndex / inv.index_at_entry))
+                const changePct = (returnPts / inv.points_invested - 1) * 100
+                return (
+                  <div key={inv.id} className="bg-surface border border-border rounded-xl p-5">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <p className="text-sm font-semibold tabular-nums">{shares.toLocaleString()} 枚</p>
+                        <p className="text-xs text-dim mt-0.5">購入時指数: {entryIndex}</p>
+                      </div>
+                      <span className={`text-sm font-bold tabular-nums ${changePct >= 0 ? 'text-mga' : 'text-accent'}`}>
+                        {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm mb-3">
+                      <span className="text-dim">現在の価値</span>
+                      <span className={returnPts >= inv.points_invested ? 'text-mga' : 'text-accent'}>
+                        {returnPts.toLocaleString()} pt
+                      </span>
+                    </div>
+                    <form action="/api/withdraw" method="post">
+                      <input type="hidden" name="investment_id" value={inv.id} />
+                      <button
+                        type="submit"
+                        className="w-full bg-surface2 border border-border rounded-lg py-2 text-sm font-medium hover:border-dim transition-colors"
+                      >
+                        回収する（{returnPts.toLocaleString()} pt）
+                      </button>
+                    </form>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
       ) : (
         <div className="bg-surface border border-border rounded-xl p-5 text-center">
-          <p className="text-dim text-sm mb-3">ポイントを投入するにはログインが必要です</p>
+          <p className="text-dim text-sm mb-3">カードを購入するにはログインが必要です</p>
           <a href="/login" className="text-sm underline hover:text-text transition-colors">
             ログイン
           </a>

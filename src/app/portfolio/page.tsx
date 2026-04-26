@@ -29,8 +29,7 @@ export default async function PortfolioPage() {
 
   const totalInvested = items.reduce((s, i) => s + i.points_invested, 0)
   const totalCurrent = items.reduce((s, i) => {
-    const ret = Math.round(i.points_invested * (i.artist.current_index / i.index_at_entry))
-    return s + ret
+    return s + Math.round(i.points_invested * (Math.floor(i.artist.current_index) / i.index_at_entry))
   }, 0)
 
   return (
@@ -55,10 +54,10 @@ export default async function PortfolioPage() {
         ))}
       </div>
 
-      {/* 投入一覧 */}
+      {/* カード一覧 */}
       {items.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-dim text-sm mb-4">まだポイントを投入していません</p>
+          <p className="text-dim text-sm mb-4">まだカードを持っていません</p>
           <Link href="/" className="text-sm underline hover:text-text transition-colors">
             アーティスト一覧へ
           </Link>
@@ -66,9 +65,10 @@ export default async function PortfolioPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {items.map((inv) => {
-            const returnPts = Math.round(
-              inv.points_invested * (inv.artist.current_index / inv.index_at_entry),
-            )
+            const currentIndex = Math.floor(inv.artist.current_index)
+            const entryIndex = Math.floor(inv.index_at_entry)
+            const shares = Math.round(inv.points_invested / inv.index_at_entry)
+            const returnPts = Math.round(inv.points_invested * (currentIndex / inv.index_at_entry))
             const changePct = (returnPts / inv.points_invested - 1) * 100
             return (
               <div key={inv.id} className="bg-surface border border-border rounded-xl p-5">
@@ -80,14 +80,18 @@ export default async function PortfolioPage() {
                     {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
                   </span>
                 </div>
-                <div className="grid grid-cols-3 text-sm text-dim gap-2 mb-4">
+                <div className="grid grid-cols-4 text-sm text-dim gap-2 mb-4">
                   <div>
-                    <p className="text-xs mb-0.5">投入時指数</p>
-                    <p className="text-text tabular-nums">{inv.index_at_entry.toFixed(1)}</p>
+                    <p className="text-xs mb-0.5">枚数</p>
+                    <p className="text-text tabular-nums">{shares.toLocaleString()} 枚</p>
+                  </div>
+                  <div>
+                    <p className="text-xs mb-0.5">購入時指数</p>
+                    <p className="text-text tabular-nums">{entryIndex}</p>
                   </div>
                   <div>
                     <p className="text-xs mb-0.5">現在指数</p>
-                    <p className="text-text tabular-nums">{inv.artist.current_index.toFixed(1)}</p>
+                    <p className="text-text tabular-nums">{currentIndex}</p>
                   </div>
                   <div>
                     <p className="text-xs mb-0.5">投入 → 現在</p>
