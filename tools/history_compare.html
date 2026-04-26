@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>指数手法比較ツール</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #e6edf3; font-family: 'Courier New', monospace; padding: 16px; font-size: 13px; }
+h1 { color: #4ade80; font-size: 18px; margin-bottom: 4px; }
+.sub { color: #8b949e; font-size: 11px; margin-bottom: 14px; line-height: 1.8; }
+.layout { display: grid; grid-template-columns: 420px 1fr; gap: 16px; align-items: start; }
+.pane { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+.pane h3 { color: #e6edf3; font-size: 12px; margin-bottom: 8px; letter-spacing: 0.05em; }
+.pane .note { color: #8b949e; font-size: 11px; margin-bottom: 8px; line-height: 1.7; }
+textarea { width: 100%; height: 560px; background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 11px; resize: vertical; outline: none; }
+textarea:focus { border-color: #4ade80; }
+.btns { display: flex; gap: 8px; margin-top: 10px; }
+button { background: #4ade80; color: #0d1117; border: none; padding: 6px 14px; cursor: pointer; font-weight: bold; font-size: 12px; border-radius: 4px; }
+button.sec { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
+button:hover { opacity: 0.85; }
+.charts { display: flex; flex-direction: column; gap: 14px; }
+.cbox { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+.ctitle { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
+.cmeta { color: #8b949e; font-size: 11px; margin-bottom: 3px; }
+.cmeta2 { color: #a78bfa; font-size: 11px; margin-bottom: 10px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.li { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8b949e; }
+.lline { width: 24px; height: 2px; }
+table { border-collapse: collapse; width: 100%; font-size: 11px; margin-top: 4px; }
+th, td { border: 1px solid #30363d; padding: 6px 8px; vertical-align: top; }
+th { background: #21262d; color: #8b949e; }
+code { background: #21262d; padding: 1px 5px; border-radius: 3px; font-size: 10px; }
+.err { color: #f78166; background: #21262d; padding: 10px; border-radius: 4px; font-size: 12px; margin: 8px; }
+</style>
+</head>
+<body>
+<h1>📊 指数手法比較ツール v5</h1>
+<p class="sub">
+  <b style="color:#e6edf3">データの流れ：</b>
+  <code>generate_daily（日次）</code> → 集計して <code>monthly（月次）</code> → A2の月内フラット推定に使用。<br>
+  <b style="color:#e0e0e0">Original</b>：日次データをそのまま使って毎日計算（W=180日窓）→ 追加日でスケール。180日後から表示。<br>
+  <b style="color:#60a5fa">A2</b>：追加日前＝月次集計から均した日次推定（月内一定）で毎日計算 → 追加日でスケール。<br>
+  　　追加日後＝追加前の月次推定B引き継ぎ＋実日次で毎日更新（W_LONG日後に月次推定がBから押し出される）。<br>
+  <b style="color:#8b949e">差の原因</b>：同じ月次合計でも日次の分布（週末/季節変動）がBの計算に与える影響の違い。ランダムではなく決定論的パターン。
+</p>
+
+<div class="layout">
+  <div style="display:flex;flex-direction:column;gap:14px;">
+    <div class="pane">
+      <h3>パラメータ（JSON）</h3>
+      <p class="note">
+        <b>start_date / end_date</b>: 日次データの期間（合計730日推奨）<br>
+        <b>base_views</b>: start_date時点の1日あたり再生数<br>
+        <b>trend</b>: 日次成長率（例: 0.004=+0.4%/日, -0.003=-0.3%/日）<br>
+        <b>seasonal</b>: 年間季節変動振幅（0.2=±20%、夏にピーク）<br>
+        <b>weekly</b>: 週内変動振幅（0.15=週末+約11%、平日-約4%）<br>
+        <b>total_views_at_addition</b>: 追加日時点の累計再生数（初期指数算出用）
+      </p>
+      <textarea id="din" spellcheck="false"></textarea>
+      <div class="btns">
+        <button onclick="run()">▶ 再計算</button>
+        <button class="sec" onclick="resetData()">↺ リセット</button>
+      </div>
+    </div>
+
+    <div class="pane">
+      <h3>手法の比較</h3>
+      <table>
+        <tr><th>手法</th><th>追加日前のB構築</th><th>追加日後のB</th></tr>
+        <tr>
+          <td style="color:#e0e0e0">Original</td>
+          <td>実日次（週末山・季節山あり）で W_LONG窓</td>
+          <td>実日次180日平均<br><b style="color:#4ade80">最精確</b></td>
+        </tr>
+        <tr>
+          <td style="color:#60a5fa">A2</td>
+          <td>月次集計÷日数 の<br>フラット推定で W_LONG窓<br>（週末/季節の凹凸なし）</td>
+          <td>月次フラット推定を<br>引き継ぎ＋実日次で<br>徐々に置き換わる<br><b style="color:#f59e0b">W_LONG日後に完全移行</b></td>
+        </tr>
+      </table>
+      <p class="note" style="margin-top:8px;">
+        <b style="color:#e6edf3">ポイント：</b> A2と Originalの差は<b>ランダムノイズではなく</b>、<br>
+        月次集計による「週/季節パターンの消滅」がBに与える影響。<br>
+        安定型で差が出るのは、成長/下降トレンドがないため<br>
+        週末・季節パターンの違いがBに直接効いてくるから。
+      </p>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="legend">
+      <div class="li">
+        <div class="lline" style="background:#e0e0e0;border-top:2px dotted #e0e0e0;height:0"></div>
+        Original（実日次）
+      </div>
+      <div class="li">
+        <div class="lline" style="background:#60a5fa"></div>
+        A2（追加前=月次フラット推定）
+      </div>
+      <div class="li">
+        <div class="lline" style="background:rgba(251,146,60,0.7)"></div>
+        実日次再生数 [右軸]
+      </div>
+      <div class="li">
+        <div class="lline" style="background:rgba(167,139,250,0.7);border-top:2px dashed rgba(167,139,250,0.7);height:0"></div>
+        A2推定再生数・追加前 [右軸]
+      </div>
+      <div class="li">
+        <div style="width:2px;height:14px;background:#a78bfa;opacity:0.9"></div>
+        追加日
+      </div>
+    </div>
+    <div id="charts"></div>
+  </div>
+</div>
+
+<script>
+// ─── Constants ───────────────────────────────────────────────────────────────
+const K = 3;
+const W_LONG = 180;
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function mean(arr) {
+  return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+}
+
+// ─── Seeded PRNG (deterministic per date+name) ───────────────────────────────
+// Returns a stable float in [0,1]. Used for daily noise so the same date always
+// produces the same random factor (reproducible, editable in JSON).
+function seededRand(seed) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  h ^= h >>> 16; h = Math.imul(h, 0x45d9f3b) >>> 0;
+  h ^= h >>> 16; h = Math.imul(h, 0x45d9f3b) >>> 0;
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+// ─── Daily data generator ──────────────────────────────────────────────────────
+// Generates deterministic daily view counts with trend + seasonal + weekly +
+// optional per-day random noise (all seeded, reproducible).
+//
+//   trend   : daily growth rate (e.g. 0.004 = +0.4%/day compounding)
+//   seasonal: amplitude of annual sinusoidal cycle (peak early July)
+//   weekly  : amplitude of weekday/weekend cycle
+//             weekends = +(weekly * 5/7), weekdays = -(weekly * 2/7)
+//             7-day average equals the trend exactly
+//   noise   : per-day random factor amplitude (e.g. 0.15 = ×0.85〜×1.15)
+//             seeded by artistName+date → reproducible, different per artist
+//             月次集計するとノイズの大半が打ち消し合い、A2の推定より汚くなる
+function generateDailyData(startDate, endDate, baseViews, trend, seasonal, weekly, noise, artistName) {
+  const result = [];
+  let date = startDate;
+  let i = 0;
+  while (date <= endDate) {
+    const trendFactor    = Math.pow(1 + trend, i);
+    const seasonalFactor = 1 + seasonal * Math.sin(2 * Math.PI * (i + 91) / 365);
+    const dow = new Date(date + 'T00:00:00Z').getUTCDay();
+    const isWeekend = (dow === 0 || dow === 6);
+    const weeklyFactor   = isWeekend ? (1 + weekly * 5 / 7) : (1 - weekly * 2 / 7);
+    // Per-day noise: uniform in [1-noise, 1+noise], seeded for reproducibility
+    const r = seededRand(artistName + date);
+    const noiseFactor    = noise > 0 ? (1 - noise + 2 * noise * r) : 1;
+    const views = Math.max(1, Math.round(baseViews * trendFactor * seasonalFactor * weeklyFactor * noiseFactor));
+    result.push({ date, views });
+    date = addDays(date, 1);
+    i++;
+  }
+  return result;
+}
+
+// ─── Derive monthly totals from daily data ─────────────────────────────────────
+// monthly_views = sum of daily views in that calendar month.
+// This is what a "monthly data provider" would report.
+function dailyToMonthly(dailyData) {
+  const map = {};
+  for (const { date, views } of dailyData) {
+    const month = date.slice(0, 7);
+    map[month] = (map[month] || 0) + views;
+  }
+  return Object.entries(map)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([month, monthly_views]) => ({ month, monthly_views }));
+}
+
+// ─── Spread monthly total evenly across each day ───────────────────────────────
+// This is A2's pre-addition estimate: it only knows the monthly total,
+// so it assumes uniform distribution within each month.
+// Result: daily views = monthly_views / days_in_month (constant within month,
+//         steps at month boundaries, no weekly/seasonal pattern).
+function monthlyToFlat(monthlyData) {
+  const out = [];
+  for (const { month, monthly_views } of monthlyData) {
+    const [y, m] = month.split('-').map(Number);
+    const days = daysInMonth(y, m);
+    const dailyAvg = monthly_views / days; // fractional OK; B uses floats anyway
+    for (let d = 1; d <= days; d++) {
+      const date = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      out.push({ date, views: dailyAvg });
+    }
+  }
+  return out.sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+// ─── Index formula ────────────────────────────────────────────────────────────
+function applyFormula(index, d, B) {
+  if (d <= 0 || B <= 0) return index;
+  return index * Math.pow(d / B, K / 365);
+}
+
+function calcInitialIndex(totalViews) {
+  return Math.sqrt(totalViews / 1_000_000) * 10;
+}
+
+// ─── Original ─────────────────────────────────────────────────────────────────
+// Uses actual daily data (with real weekly/seasonal variation).
+// W_LONG rolling window. Anchored so index at addDate == initIdx.
+// Displayed from day W_LONG onward (B is mature by then).
+function simOriginal(dailyStream, addDate, initIdx) {
+  const hist = [];
+  let rawIdx = 100;
+  const raw = [];
+  for (const { date, views } of dailyStream) {
+    const B = hist.length > 0 ? mean(hist) : views;
+    rawIdx = applyFormula(rawIdx, views, B);
+    raw.push({ date, index: rawIdx });
+    hist.push(views);
+    if (hist.length > W_LONG) hist.shift();
+  }
+  const anchor = raw.find(r => r.date === addDate);
+  if (!anchor || anchor.index === 0) return raw;
+  const scale = initIdx / anchor.index;
+  return raw.map(r => ({ date: r.date, index: r.index * scale }));
+}
+
+// ─── A2 ───────────────────────────────────────────────────────────────────────
+// Phase 1 (pre-addition, flat daily estimates):
+//   preFlatStream = monthlyToFlat(preMonthly): same monthly total as Original,
+//   but uniformly spread—no weekly peaks, no seasonal variation.
+//   B = rolling W_LONG mean of these flat estimates.
+//
+// Phase 2 (post-addition, actual daily):
+//   hist carries over from Phase 1 (flat estimates as warm seed).
+//   Real daily values replace flat values in hist over W_LONG days.
+//
+// Anchored so index at addDate == initIdx.
+function simA2(preFlatStream, postDailyStream, addDate, initIdx) {
+  const hist = [];
+  let rawIdx = 100;
+  const raw = [];
+
+  // Phase 1: flat estimates pre-addition
+  for (const { date, views } of preFlatStream) {
+    if (date >= addDate) break;
+    const B = hist.length > 0 ? mean(hist) : views;
+    rawIdx = applyFormula(rawIdx, views, B);
+    raw.push({ date, index: rawIdx });
+    hist.push(views);
+    if (hist.length > W_LONG) hist.shift();
+  }
+
+  // Phase 2: actual daily data post-addition
+  for (const { date, views } of postDailyStream) {
+    const B = hist.length > 0 ? mean(hist) : views;
+    rawIdx = applyFormula(rawIdx, views, B);
+    raw.push({ date, index: rawIdx });
+    hist.push(views);
+    if (hist.length > W_LONG) hist.shift();
+  }
+
+  // Anchor at addDate
+  const anchor = raw.find(r => r.date === addDate);
+  if (!anchor || anchor.index === 0) return raw;
+  const scale = initIdx / anchor.index;
+  return raw.map(r => ({ date: r.date, index: r.index * scale }));
+}
+
+// ─── Chart helpers ────────────────────────────────────────────────────────────
+const chartInstances = [];
+
+const vlinePlugin = {
+  id: 'vline',
+  afterDraw(chart) {
+    if (!chart._vlineLabel) return;
+    const xi = chart.data.labels.indexOf(chart._vlineLabel);
+    if (xi < 0) return;
+    const xs = chart.scales.x, ys = chart.scales.y;
+    const x = xs.getPixelForValue(xi);
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, ys.top);
+    ctx.lineTo(x, ys.bottom);
+    ctx.strokeStyle = '#a78bfa';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.globalAlpha = 0.9;
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+Chart.register(vlinePlugin);
+
+function mkDataset(label, color, data, { dash = [], spanGaps = false, width = 2, yAxisID = 'y' } = {}) {
+  return {
+    label, data,
+    borderColor: color, backgroundColor: 'transparent',
+    pointRadius: 0, borderWidth: width, tension: 0.15,
+    spanGaps,
+    borderDash: dash,
+    yAxisID,
+  };
+}
+
+function fmtViews(v) {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 10_000)    return `${(v / 10_000).toFixed(1)}万`;
+  return `${Math.round(v)}`;
+}
+
+function buildChart(canvasId, labels, datasets, vlineLabel) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#8b949e', font: { size: 10 }, boxWidth: 16 } },
+        tooltip: {
+          backgroundColor: '#21262d', borderColor: '#30363d', borderWidth: 1,
+          titleColor: '#8b949e', bodyColor: '#e6edf3',
+          callbacks: {
+            title: items => items[0]?.label ?? '',
+            label: item => {
+              if (item.raw == null) return null;
+              if (item.dataset.yAxisID === 'y1') {
+                return `${item.dataset.label}: ${fmtViews(item.raw)}`;
+              }
+              return `${item.dataset.label}: ${item.raw.toFixed(2)}`;
+            },
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#8b949e', font: { size: 9 }, maxTicksLimit: 28,
+            callback(_, i) {
+              const d = labels[i];
+              return d?.slice(8) === '01' ? d.slice(0, 7) : '';
+            }
+          },
+          grid: { color: '#21262d' }
+        },
+        y: {
+          position: 'left',
+          ticks: { color: '#8b949e', font: { size: 10 } },
+          grid: { color: '#21262d' }
+        },
+        y1: {
+          position: 'right',
+          ticks: {
+            color: '#6b7280',
+            font: { size: 9 },
+            maxTicksLimit: 5,
+            callback: v => fmtViews(v),
+          },
+          grid: { drawOnChartArea: false },
+        },
+      }
+    }
+  });
+  chart._vlineLabel = vlineLabel;
+  return chart;
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+function run() {
+  let data;
+  try { data = JSON.parse(document.getElementById('din').value); }
+  catch (e) {
+    document.getElementById('charts').innerHTML = `<div class="err">JSONパースエラー: ${e.message}</div>`;
+    return;
+  }
+
+  chartInstances.forEach(c => c.destroy());
+  chartInstances.length = 0;
+  document.getElementById('charts').innerHTML = '';
+
+  for (const artist of (data.artists ?? [])) {
+    const {
+      name, addition_date, total_views_at_addition,
+      start_date, end_date,
+      base_views, trend = 0, seasonal = 0, weekly = 0, noise = 0
+    } = artist;
+    const initIdx = calcInitialIndex(total_views_at_addition);
+    const addMonth = addition_date.slice(0, 7);
+
+    // 1. Generate actual daily data (trend × seasonal × weekly × noise)
+    //    noise はアーティスト名+日付でシードされた決定論的乱数 → 再現可能
+    //    月次集計するとノイズの大半が相殺されるため A2 の推定より変動が大きくなる
+    const dailyData = generateDailyData(start_date, end_date, base_views, trend, seasonal, weekly, noise, name);
+
+    // 2. Derive monthly from daily (what a monthly data provider would report)
+    const monthlyAll = dailyToMonthly(dailyData);
+    const preMonthly = monthlyAll.filter(m => m.month < addMonth);
+
+    // 3. A2 pre-addition: flat estimates from pre-addition monthly totals
+    const preFlatStream = monthlyToFlat(preMonthly);
+
+    // 4. Post-addition actual daily
+    const postDaily = dailyData.filter(d => d.date >= addition_date);
+
+    // 5. Original: all actual daily data, anchored at addition_date
+    const origAll = simOriginal(dailyData, addition_date, initIdx);
+    const origDisplayStart = addDays(dailyData[0].date, W_LONG - 1);
+    const origDisplay = origAll.filter(r => r.date >= origDisplayStart);
+
+    // 6. A2: flat pre + actual post
+    const a2 = simA2(preFlatStream, postDaily, addition_date, initIdx);
+
+    // 7. Chart date axis: all dates in the daily data range
+    const allDates = dailyData.map(d => d.date);
+
+    // 8. Index lookup maps
+    const mOrig = Object.fromEntries(origDisplay.map(r => [r.date, r.index]));
+    const mA2   = Object.fromEntries(a2.map(r => [r.date, r.index]));
+
+    // 9. Views lookup maps
+    const mViewsActual = Object.fromEntries(dailyData.map(r => [r.date, r.views]));
+    const mViewsFlat   = Object.fromEntries(preFlatStream.map(r => [r.date, r.views]));
+
+    // 10. Compute monthly summary for display
+    const totalDays = dailyData.length;
+    const lastDay   = dailyData[dailyData.length - 1];
+    const viewsAtAdd = dailyData.filter(d => d.date < addition_date).reduce((s,d) => s + d.views, 0);
+
+    // 11. Build DOM
+    const cid = `c-${name.replace(/[^\w]/g,'_')}`;
+    const box = document.createElement('div');
+    box.className = 'cbox';
+    box.innerHTML = `
+      <div class="ctitle">${name}</div>
+      <div class="cmeta">
+        初期指数: ${initIdx.toFixed(1)}　追加日: ${addition_date}　日次データ: ${totalDays}日（${start_date} 〜 ${end_date}）<br>
+        trend: ${(trend*100).toFixed(2)}%/日　seasonal: ±${(seasonal*100).toFixed(0)}%　weekly: ±${(weekly*100).toFixed(0)}%　noise: ±${(noise*100).toFixed(0)}%
+      </div>
+      <div class="cmeta2">
+        ▸ Original表示開始: ${origDisplayStart}（B成熟後）　
+        ▸ A2追加前: ${preMonthly.length}ヶ月分の月次フラット推定（週末/季節消滅）
+      </div>
+      <canvas id="${cid}" height="230"></canvas>
+    `;
+    document.getElementById('charts').appendChild(box);
+
+    // 12. Build datasets
+    const datasets = [
+      // ── 左軸: 指数 ──
+      mkDataset('Original（実日次指数）', '#e0e0e0',
+        allDates.map(d => mOrig[d] ?? null),
+        { dash: [2, 2], width: 1.5 }),
+      mkDataset('A2（追加前=月次フラット / 追加後=実日次）', '#60a5fa',
+        allDates.map(d => mA2[d] ?? null),
+        { width: 2 }),
+      // ── 右軸: 再生数 ──
+      // 実際の日次再生数（週末山・季節山あり）
+      mkDataset('実日次再生数 [右軸]', 'rgba(251,146,60,0.6)',
+        allDates.map(d => mViewsActual[d] ?? null),
+        { width: 1, yAxisID: 'y1' }),
+      // A2追加前の推定（月内一定、月境界でステップ）→ 追加日以降はnull
+      mkDataset('A2推定再生数・追加前 [右軸]', 'rgba(167,139,250,0.6)',
+        allDates.map(d => d < addition_date ? (mViewsFlat[d] ?? null) : null),
+        { width: 1, dash: [4, 2], yAxisID: 'y1' }),
+    ];
+
+    const chart = buildChart(cid, allDates, datasets, addition_date);
+    chartInstances.push(chart);
+  }
+}
+
+// ─── Default test data ────────────────────────────────────────────────────────
+// 日次データはコード内で deterministic に生成される（乱数なし）。
+// 月次はその集計から自動計算（噂のように「月次から日次」ではなく「日次から月次」）。
+const DEFAULT = {
+  "artists": [
+    {
+      "name": "急成長型",
+      "addition_date": "2025-04-01",
+      "total_views_at_addition": 200000000,
+      "start_date": "2024-04-01",
+      "end_date": "2026-03-31",
+      "base_views": 5000,
+      "trend": 0.0045,
+      "seasonal": 0.20,
+      "weekly": 0.15,
+      "noise": 0.20
+    },
+    {
+      "name": "安定型",
+      "addition_date": "2025-04-01",
+      "total_views_at_addition": 500000000,
+      "start_date": "2024-04-01",
+      "end_date": "2026-03-31",
+      "base_views": 165000,
+      "trend": 0.0001,
+      "seasonal": 0.12,
+      "weekly": 0.18,
+      "noise": 0.15
+    },
+    {
+      "name": "下降型",
+      "addition_date": "2025-04-01",
+      "total_views_at_addition": 1000000000,
+      "start_date": "2024-04-01",
+      "end_date": "2026-03-31",
+      "base_views": 1100000,
+      "trend": -0.0030,
+      "seasonal": 0.18,
+      "weekly": 0.10,
+      "noise": 0.18
+    }
+  ]
+};
+
+function resetData() {
+  document.getElementById('din').value = JSON.stringify(DEFAULT, null, 2);
+  run();
+}
+
+document.getElementById('din').value = JSON.stringify(DEFAULT, null, 2);
+run();
+</script>
+</body>
+</html>

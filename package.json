@@ -2,18 +2,29 @@
   "name": "artist-index",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
+    "dev":        "next dev --turbopack",
+    "build":      "next build",
+    "start":      "next start",
     "fetch":      "tsx --env-file=.env scripts/fetch_views.ts",
     "calc":       "tsx --env-file=.env scripts/calc_index.ts",
     "update":     "tsx --env-file=.env scripts/fetch_views.ts && tsx --env-file=.env scripts/calc_index.ts",
     "add-artist": "tsx --env-file=.env scripts/add_artist.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0"
+    "@supabase/ssr": "^0.5.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "next": "^15.3.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
