@@ -8,10 +8,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
+export const dynamic = 'force-dynamic'
+
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+}
 
 const K = 3
 const BASELINE_DAYS = 180
@@ -30,7 +34,7 @@ async function fetchChannelViewCount(channelId: string): Promise<number> {
   return parseInt(data.items[0].statistics.viewCount, 10)
 }
 
-async function fetchViews(today: string): Promise<Record<string, string>> {
+async function fetchViews(today: string, supabase: ReturnType<typeof getSupabase>): Promise<Record<string, string>> {
   const { data: artists, error } = await supabase.from('artists').select('id, name, youtube_channel_id')
   if (error) throw error
 
@@ -68,7 +72,7 @@ async function fetchViews(today: string): Promise<Record<string, string>> {
 
 // ── calc_index ─────────────────────────────────────────────────────────────────
 
-async function calcIndex(today: string): Promise<Record<string, string>> {
+async function calcIndex(today: string, supabase: ReturnType<typeof getSupabase>): Promise<Record<string, string>> {
   const baselineFrom = new Date(Date.now() - BASELINE_DAYS * 24 * 60 * 60 * 1000)
     .toISOString().split('T')[0]
 
@@ -133,9 +137,11 @@ export async function GET(request: Request) {
   const today = new Date().toISOString().split('T')[0]
   console.log(`[cron/update] ${today} 開始`)
 
+  const supabase = getSupabase()
+
   try {
-    const fetchResults = await fetchViews(today)
-    const calcResults = await calcIndex(today)
+    const fetchResults = await fetchViews(today, supabase)
+    const calcResults = await calcIndex(today, supabase)
 
     console.log('[cron/update] 完了')
     return NextResponse.json({ date: today, fetch: fetchResults, calc: calcResults })
