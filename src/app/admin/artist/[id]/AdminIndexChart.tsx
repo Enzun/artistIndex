@@ -50,16 +50,29 @@ function CustomDot(props: { cx?: number; cy?: number; index?: number; dataLength
   return <circle cx={cx} cy={cy} r={4} fill="#2563eb" stroke="#ffffff" strokeWidth={2} />
 }
 
+type SnapshotWithViews = Snapshot & { total_views?: number | null }
+
 // 取得開始日=100ptに正規化したA2指数プレビュー
-export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }) {
+// index_value がない場合は total_views で代替
+export default function AdminIndexChart({ snapshots }: { snapshots: SnapshotWithViews[] }) {
   const [period, setPeriod] = useState<typeof PERIODS[number]['label']>('ALL')
 
   const withValue = snapshots.filter(s => s.index_value !== null)
-  const firstVal = withValue[0]?.index_value ?? null
+  const useViews = withValue.length === 0  // index_value が全部NULLなら再生数で代替
 
-  const allData = withValue.map(s => ({
+  const sourceData = useViews
+    ? snapshots.filter(s => s.total_views != null && s.total_views > 0)
+    : withValue
+
+  const firstVal = useViews
+    ? (sourceData[0] as SnapshotWithViews)?.total_views ?? null
+    : sourceData[0]?.index_value ?? null
+
+  const allData = sourceData.map(s => ({
     date: s.snapshot_date,
-    index: firstVal ? (s.index_value! / firstVal) * 100 : s.index_value!,
+    index: firstVal
+      ? ((useViews ? (s as SnapshotWithViews).total_views! : s.index_value!) / firstVal) * 100
+      : 100,
   }))
 
   const selectedDays = PERIODS.find(p => p.label === period)?.days ?? Infinity
@@ -101,7 +114,9 @@ export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }
   return (
     <div className="bg-surface border border-border rounded-xl p-4 mb-4">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs text-dim">指数推移（プレビュー・取得開始日=100pt）</p>
+        <p className="text-xs text-dim">
+          {useViews ? '再生数推移（取得開始日=100pt、指数データなし）' : '指数推移（プレビュー・取得開始日=100pt）'}
+        </p>
         <div className="flex gap-1">
           {PERIODS.map(({ label, days }) => {
             const available = days === Infinity || availableDays >= days * 0.8
