@@ -24,6 +24,7 @@ export default async function HomePage() {
   const { data: artists } = await supabase
     .from('artists')
     .select('*')
+    .eq('status', 'active')
     .order('current_index', { ascending: false })
 
   // 各アーティストの直近30日の指数履歴

@@ -76,7 +76,7 @@ async function calcIndex(today: string, supabase: ReturnType<typeof getSupabase>
   const baselineFrom = new Date(Date.now() - BASELINE_DAYS * 24 * 60 * 60 * 1000)
     .toISOString().split('T')[0]
 
-  const { data: artists, error } = await supabase.from('artists').select('id, name, current_index')
+  const { data: artists, error } = await supabase.from('artists').select('id, name, current_index').eq('status', 'active')
   if (error) throw error
 
   const results: Record<string, string> = {}
