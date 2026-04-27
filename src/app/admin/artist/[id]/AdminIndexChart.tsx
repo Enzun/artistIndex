@@ -18,17 +18,19 @@ type Snapshot = { snapshot_date: string; index_value: number | null; daily_incre
 const K = 3
 const BASELINE = 180
 
+type ChartPoint = { date: string; index: number; views: number | null }
+
 // daily_increase だけを使って A2 式をその場で計算（DB書き込みなし）
 // 開始日=100pt で正規化。初日 daily_increase=0 でも起点として使う
-function calcPreview(snapshots: Snapshot[]): { date: string; index: number }[] {
+function calcPreview(snapshots: Snapshot[]): ChartPoint[] {
   const data = snapshots
     .filter(s => s.daily_increase != null)
     .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
   if (data.length < 1) return []
 
-  const result: { date: string; index: number }[] = []
+  const result: ChartPoint[] = []
   let idx = 100
-  result.push({ date: data[0].snapshot_date, index: 100 })
+  result.push({ date: data[0].snapshot_date, index: 100, views: data[0].daily_increase ?? null })
 
   for (let i = 1; i < data.length; i++) {
     const d = data[i].daily_increase ?? 0
@@ -39,7 +41,7 @@ function calcPreview(snapshots: Snapshot[]): { date: string; index: number }[] {
         idx = idx * Math.pow(d / B, K / 365)
       }
     }
-    result.push({ date: data[i].snapshot_date, index: Math.round(idx * 100) / 100 })
+    result.push({ date: data[i].snapshot_date, index: Math.round(idx * 100) / 100, views: data[i].daily_increase ?? null })
   }
   return result
 }
@@ -62,13 +64,22 @@ function formatDateShort(dateStr: string) {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-function CustomTooltip({ active, payload }: TooltipProps<number, string> & { payload?: Array<{ payload: { date: string; index: number } }> }) {
+function formatViews(v: number) {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`
+  return v.toLocaleString()
+}
+
+function CustomTooltip({ active, payload }: TooltipProps<number, string> & { payload?: Array<{ payload: ChartPoint }> }) {
   if (!active || !payload?.length) return null
-  const { date, index } = payload[0].payload as { date: string; index: number }
+  const { date, index, views } = payload[0].payload
   return (
     <div className="bg-white border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
       <p className="text-dim mb-1">{formatDate(date)}</p>
       <p className="text-text font-bold tabular-nums text-sm">{index.toFixed(1)} pt</p>
+      {views != null && views > 0 && (
+        <p className="text-dim tabular-nums mt-0.5">{formatViews(views)} 再生/日</p>
+      )}
     </div>
   )
 }
@@ -90,11 +101,13 @@ export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }
   // index_value あり: 先頭=100pt に正規化
   // index_value なし: A2 式でその場計算
   const firstVal = withValue[0]?.index_value ?? null
-  const allData: { date: string; index: number }[] = useCalc
+  const viewsMap = new Map(snapshots.map(s => [s.snapshot_date, s.daily_increase ?? null]))
+  const allData: ChartPoint[] = useCalc
     ? calcPreview(snapshots)
     : withValue.map(s => ({
         date: s.snapshot_date,
         index: firstVal ? (s.index_value! / firstVal) * 100 : s.index_value!,
+        views: viewsMap.get(s.snapshot_date) ?? null,
       }))
 
   const selectedDays = PERIODS.find(p => p.label === period)?.days ?? Infinity
