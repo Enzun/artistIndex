@@ -56,7 +56,7 @@ export default function WithdrawButton({
       <button
         onClick={handleWithdraw}
         disabled={loading}
-        className="w-full bg-surface2 border border-border rounded-lg py-2 text-sm font-medium hover:border-dim transition-colors disabled:opacity-50"
+        className="w-full bg-mga/10 border border-mga/30 text-mga rounded-lg py-2 text-sm font-medium hover:bg-mga/20 transition-colors disabled:opacity-50"
       >
         {loading ? '処理中...' : `回収する（${returnPts.toLocaleString()} pt）`}
       </button>

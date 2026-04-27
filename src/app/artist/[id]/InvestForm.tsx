@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation'
 export default function InvestForm({
   artistId,
   currentIndex,
+  freePoints,
 }: {
   artistId: string
   currentIndex: number
+  freePoints: number
 }) {
   const [shares, setShares] = useState('')
   const [loading, setLoading] = useState(false)
@@ -43,6 +45,17 @@ export default function InvestForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      {/* 価格情報（上） */}
+      <div className="flex justify-between items-baseline">
+        <span className="text-base font-semibold tabular-nums">
+          1枚 = {pricePerShare.toLocaleString()} pt
+        </span>
+        <span className={`text-base font-bold tabular-nums ${totalCost > 0 ? 'text-text' : 'text-dim'}`}>
+          合計 {totalCost > 0 ? totalCost.toLocaleString() : '—'} pt
+        </span>
+      </div>
+
+      {/* 枚数入力 */}
       <div className="flex items-center gap-2">
         <div className="flex-1 flex items-center border border-border rounded-lg overflow-hidden bg-white">
           <input
@@ -59,17 +72,17 @@ export default function InvestForm({
         <button
           type="submit"
           disabled={loading || n < 1}
-          className="bg-mga/10 border border-mga/30 text-mga rounded-lg px-4 py-2 text-sm font-medium hover:bg-mga/20 transition-colors disabled:opacity-50 whitespace-nowrap"
+          className="bg-accent/10 border border-accent/30 text-accent rounded-lg px-4 py-2 text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 whitespace-nowrap"
         >
           {loading ? '処理中...' : '購入'}
         </button>
       </div>
-      <div className="flex justify-between text-xs text-dim px-0.5">
-        <span>1枚 = {pricePerShare.toLocaleString()} pt</span>
-        <span className={`tabular-nums font-medium ${n > 0 ? 'text-text' : ''}`}>
-          合計 {totalCost > 0 ? totalCost.toLocaleString() : '—'} pt
-        </span>
-      </div>
+
+      {/* 所持ポイント（下・小さめ） */}
+      <p className="text-xs text-dim text-right">
+        所持ポイント: {freePoints.toLocaleString()} pt
+      </p>
+
       {error && <p className="text-accent text-xs">{error}</p>}
     </form>
   )

@@ -4,6 +4,7 @@ import type { ViewSnapshot, Investment } from '@/lib/types'
 import InvestForm from './InvestForm'
 import WithdrawButton from './WithdrawButton'
 import IndexChart from './IndexChart'
+import ViewsChart from './ViewsChart'
 
 export default async function ArtistPage({
   params,
@@ -62,16 +63,13 @@ export default async function ArtistPage({
       </p>
 
       <IndexChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
+      <ViewsChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
 
       {user ? (
         <div className="flex flex-col gap-4">
-          {/* 所持ポイント・購入フォーム */}
+          {/* 購入フォーム */}
           <div className="bg-surface border border-border rounded-xl p-5">
-            <p className="text-xs text-dim mb-1">所持ポイント</p>
-            <p className="text-2xl font-bold tabular-nums mb-4">
-              {userProfile?.free_points.toLocaleString() ?? 0} pt
-            </p>
-            <InvestForm artistId={id} currentIndex={rawIndex} />
+            <InvestForm artistId={id} currentIndex={rawIndex} freePoints={userProfile?.free_points ?? 0} />
           </div>
 
           {/* 保有カード一覧 */}
