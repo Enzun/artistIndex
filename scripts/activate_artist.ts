@@ -52,6 +52,21 @@ async function main() {
     process.exit(0)
   }
 
+  // 最新スナップショットから total_views を取得して指数を計算
+  const { data: snap } = await supabase
+    .from('view_snapshots')
+    .select('total_views')
+    .eq('artist_id', artistId)
+    .order('snapshot_date', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (!snap) {
+    console.error('スナップショットがありません。先に cron を実行してください。')
+    process.exit(1)
+  }
+
+  const initialIndex = Math.round(Math.sqrt(Number(snap.total_views) / 1_000_000) * 10 * 100) / 100
   const today = new Date().toISOString()
 
   const { error: updateErr } = await supabase
@@ -59,16 +74,17 @@ async function main() {
     .update({
       status:        'active',
       published_at:  today,
-      current_index: 100,
-      initial_index: 100,
+      current_index: initialIndex,
+      initial_index: initialIndex,
     })
     .eq('id', artistId)
 
   if (updateErr) throw updateErr
 
   console.log(`✓ ${artist.name} を公開しました`)
-  console.log(`  published_at: ${today.slice(0, 10)}`)
-  console.log(`  initial_index: 100`)
+  console.log(`  published_at:  ${today.slice(0, 10)}`)
+  console.log(`  total_views:   ${Number(snap.total_views).toLocaleString()}`)
+  console.log(`  initial_index: ${initialIndex}`)
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })
