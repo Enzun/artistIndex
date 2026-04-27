@@ -29,7 +29,7 @@ export default async function PortfolioPage() {
 
   const totalInvested = items.reduce((s, i) => s + i.points_invested, 0)
   const totalCurrent = items.reduce((s, i) => {
-    return s + Math.round(i.points_invested * (Math.floor(i.artist.current_index) / i.index_at_entry))
+    return s + Math.round(i.points_invested * (i.artist.current_index / i.index_at_entry))
   }, 0)
 
   return (
@@ -65,51 +65,41 @@ export default async function PortfolioPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {items.map((inv) => {
-            const currentIndex = Math.floor(inv.artist.current_index)
-            const entryIndex = Math.floor(inv.index_at_entry)
+            const rawIndex = inv.artist.current_index
             const shares = Math.round(inv.points_invested / inv.index_at_entry)
-            const returnPts = Math.round(inv.points_invested * (currentIndex / inv.index_at_entry))
+            const returnPts = Math.round(inv.points_invested * (rawIndex / inv.index_at_entry))
             const changePct = (returnPts / inv.points_invested - 1) * 100
             return (
-              <div key={inv.id} className="bg-surface border border-border rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <Link href={`/artist/${inv.artist.id}`} className="font-semibold hover:text-dim transition-colors">
-                    {inv.artist.name}
-                  </Link>
-                  <span className={`text-sm font-bold tabular-nums ${changePct >= 0 ? 'text-mga' : 'text-accent'}`}>
-                    {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
-                  </span>
+              <Link key={inv.id} href={`/artist/${inv.artist.id}`}>
+                <div className="bg-surface border border-border rounded-xl p-5 hover:border-dim transition-colors">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-semibold">{inv.artist.name}</span>
+                    <span className={`text-sm font-bold tabular-nums ${changePct >= 0 ? 'text-mga' : 'text-accent'}`}>
+                      {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 text-sm gap-2">
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">枚数</p>
+                      <p className="tabular-nums">{shares.toLocaleString()} 枚</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">購入時指数</p>
+                      <p className="tabular-nums">{Math.floor(inv.index_at_entry)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">現在指数</p>
+                      <p className="tabular-nums">{Math.floor(rawIndex)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">現在の価値</p>
+                      <p className={`tabular-nums ${returnPts >= inv.points_invested ? 'text-mga' : 'text-accent'}`}>
+                        {returnPts.toLocaleString()} pt
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-4 text-sm text-dim gap-2 mb-4">
-                  <div>
-                    <p className="text-xs mb-0.5">枚数</p>
-                    <p className="text-text tabular-nums">{shares.toLocaleString()} 枚</p>
-                  </div>
-                  <div>
-                    <p className="text-xs mb-0.5">購入時指数</p>
-                    <p className="text-text tabular-nums">{entryIndex}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs mb-0.5">現在指数</p>
-                    <p className="text-text tabular-nums">{currentIndex}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs mb-0.5">投入 → 現在</p>
-                    <p className="text-text tabular-nums">
-                      {inv.points_invested.toLocaleString()} → {returnPts.toLocaleString()} pt
-                    </p>
-                  </div>
-                </div>
-                <form action="/api/withdraw" method="post">
-                  <input type="hidden" name="investment_id" value={inv.id} />
-                  <button
-                    type="submit"
-                    className="w-full bg-surface2 border border-border rounded-lg py-2 text-sm hover:border-dim transition-colors"
-                  >
-                    回収する（{returnPts.toLocaleString()} pt）
-                  </button>
-                </form>
-              </div>
+              </Link>
             )
           })}
         </div>

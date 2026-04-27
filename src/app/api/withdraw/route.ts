@@ -20,12 +20,10 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     if (error.message.includes('investment_not_found')) {
-      return NextResponse.json({ error: '投入が見つかりません' }, { status: 404 })
+      return NextResponse.json({ error: '既に回収済みです' }, { status: 404 })
     }
     return NextResponse.json({ error: '回収に失敗しました' }, { status: 500 })
   }
 
-  // redirect back to referrer or portfolio
-  const referer = request.headers.get('referer') ?? '/portfolio'
-  return NextResponse.redirect(new URL(referer, request.url), { status: 303 })
+  return NextResponse.json({ ok: true })
 }

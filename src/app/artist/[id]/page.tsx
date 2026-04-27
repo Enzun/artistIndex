@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import type { ViewSnapshot, Investment } from '@/lib/types'
 import InvestForm from './InvestForm'
+import WithdrawButton from './WithdrawButton'
 
 function IndexChart({ snapshots }: { snapshots: ViewSnapshot[] }) {
   const values = snapshots.map((s) => s.index_value ?? 0).filter(Boolean)
@@ -74,13 +75,14 @@ export default async function ArtistPage({
     activeInvestments = (invList ?? []) as Investment[]
   }
 
-  const currentIndex = Math.floor(artist.current_index as number)
+  const rawIndex = artist.current_index as number
+  const displayIndex = Math.floor(rawIndex)
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">{artist.name}</h1>
       <p className="text-5xl font-bold tabular-nums text-mga mb-6 mt-3">
-        {currentIndex}
+        {displayIndex}
       </p>
 
       <IndexChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
@@ -93,7 +95,7 @@ export default async function ArtistPage({
             <p className="text-2xl font-bold tabular-nums mb-4">
               {userProfile?.free_points.toLocaleString() ?? 0} pt
             </p>
-            <InvestForm artistId={id} currentIndex={artist.current_index as number} />
+            <InvestForm artistId={id} currentIndex={rawIndex} />
           </div>
 
           {/* 保有カード一覧 */}
@@ -101,16 +103,15 @@ export default async function ArtistPage({
             <div className="flex flex-col gap-3">
               <p className="text-xs text-dim px-1">保有カード</p>
               {activeInvestments.map((inv) => {
-                const entryIndex = Math.floor(inv.index_at_entry)
                 const shares = Math.round(inv.points_invested / inv.index_at_entry)
-                const returnPts = Math.round(inv.points_invested * (currentIndex / inv.index_at_entry))
+                const returnPts = Math.round(inv.points_invested * (rawIndex / inv.index_at_entry))
                 const changePct = (returnPts / inv.points_invested - 1) * 100
                 return (
                   <div key={inv.id} className="bg-surface border border-border rounded-xl p-5">
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <p className="text-sm font-semibold tabular-nums">{shares.toLocaleString()} 枚</p>
-                        <p className="text-xs text-dim mt-0.5">購入時指数: {entryIndex}</p>
+                        <p className="text-xs text-dim mt-0.5">購入時指数: {Math.floor(inv.index_at_entry)}</p>
                       </div>
                       <span className={`text-sm font-bold tabular-nums ${changePct >= 0 ? 'text-mga' : 'text-accent'}`}>
                         {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
@@ -122,15 +123,7 @@ export default async function ArtistPage({
                         {returnPts.toLocaleString()} pt
                       </span>
                     </div>
-                    <form action="/api/withdraw" method="post">
-                      <input type="hidden" name="investment_id" value={inv.id} />
-                      <button
-                        type="submit"
-                        className="w-full bg-surface2 border border-border rounded-lg py-2 text-sm font-medium hover:border-dim transition-colors"
-                      >
-                        回収する（{returnPts.toLocaleString()} pt）
-                      </button>
-                    </form>
+                    <WithdrawButton investmentId={inv.id} returnPts={returnPts} />
                   </div>
                 )
               })}
