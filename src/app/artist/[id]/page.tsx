@@ -105,14 +105,12 @@ export default async function ArtistPage({
             <InvestForm artistId={id} currentIndex={rawIndex} freePoints={userProfile?.free_points ?? 0} />
           </div>
 
-          {/* 保有カード（集約表示） */}
-          {activeInvestments.length > 0 && (
-            <InvestmentCard
-              artistId={id}
-              investments={activeInvestments}
-              currentIndex={rawIndex}
-            />
-          )}
+          {/* 保有カード（集約表示・0枚でも表示） */}
+          <InvestmentCard
+            artistId={id}
+            investments={activeInvestments}
+            currentIndex={rawIndex}
+          />
         </div>
       ) : (
         <div className="bg-surface border border-border rounded-xl p-5 text-center">

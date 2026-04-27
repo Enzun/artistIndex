@@ -27,10 +27,11 @@ export default async function PortfolioPage() {
 
   const items = (investments ?? []) as InvestmentWithArtist[]
 
-  const totalInvested = items.reduce((s, i) => s + i.points_invested, 0)
-  const totalCurrent = items.reduce((s, i) => {
+  const totalEval = items.reduce((s, i) => {
     return s + Math.round(i.points_invested * (i.artist.current_index / i.index_at_entry))
   }, 0)
+  const freePoints = profile?.free_points ?? 0
+  const totalPoints = freePoints + totalEval
 
   return (
     <div>
@@ -39,17 +40,13 @@ export default async function PortfolioPage() {
       {/* サマリー */}
       <div className="grid grid-cols-3 gap-3 mb-8">
         {[
-          { label: '所持ポイント', value: `${profile?.free_points.toLocaleString() ?? 0} pt` },
-          { label: '投入中合計', value: `${totalInvested.toLocaleString()} pt` },
-          {
-            label: '現在の評価額',
-            value: `${totalCurrent.toLocaleString()} pt`,
-            highlight: totalCurrent >= totalInvested,
-          },
-        ].map(({ label, value, highlight }) => (
+          { label: '所持ポイント', value: `${freePoints.toLocaleString()} pt` },
+          { label: '評価額', value: `${totalEval.toLocaleString()} pt` },
+          { label: '総ポイント', value: `${totalPoints.toLocaleString()} pt` },
+        ].map(({ label, value }) => (
           <div key={label} className="bg-surface border border-border rounded-xl p-4 text-center">
             <p className="text-xs text-dim mb-1">{label}</p>
-            <p className={`text-xl font-bold tabular-nums ${highlight ? 'text-mga' : ''}`}>{value}</p>
+            <p className="text-xl font-bold tabular-nums">{value}</p>
           </div>
         ))}
       </div>
