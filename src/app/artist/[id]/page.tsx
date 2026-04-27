@@ -3,31 +3,7 @@ import { notFound } from 'next/navigation'
 import type { ViewSnapshot, Investment } from '@/lib/types'
 import InvestForm from './InvestForm'
 import WithdrawButton from './WithdrawButton'
-
-function IndexChart({ snapshots }: { snapshots: ViewSnapshot[] }) {
-  const values = snapshots.map((s) => s.index_value ?? 0).filter(Boolean)
-  if (values.length < 2) return <p className="text-dim text-xs">データ蓄積中...</p>
-
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = max - min || 1
-  const w = 600, h = 120
-  const pts = values
-    .map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / range) * (h - 10) - 5}`)
-    .join(' ')
-  const dates = snapshots.filter((s) => s.index_value).map((s) => s.snapshot_date)
-
-  return (
-    <div className="bg-surface border border-border rounded-xl p-4 mb-6">
-      <p className="text-xs text-dim mb-3">
-        指数推移（{dates.at(0)} → {dates.at(-1)}）
-      </p>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full overflow-visible">
-        <polyline points={pts} fill="none" stroke="#4ade80" strokeWidth="2" strokeLinejoin="round" />
-      </svg>
-    </div>
-  )
-}
+import IndexChart from './IndexChart'
 
 export default async function ArtistPage({
   params,

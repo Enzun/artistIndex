@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev":        "next dev --turbopack",
-    "build":      "next build",
-    "start":      "next start",
-    "fetch":      "tsx --env-file=.env scripts/fetch_views.ts",
-    "calc":       "tsx --env-file=.env scripts/calc_index.ts",
-    "update":     "tsx --env-file=.env scripts/fetch_views.ts && tsx --env-file=.env scripts/calc_index.ts",
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "fetch": "tsx --env-file=.env scripts/fetch_views.ts",
+    "calc": "tsx --env-file=.env scripts/calc_index.ts",
+    "update": "tsx --env-file=.env scripts/fetch_views.ts && tsx --env-file=.env scripts/calc_index.ts",
     "add-artist": "tsx --env-file=.env scripts/add_artist.ts"
   },
   "dependencies": {
@@ -16,7 +16,8 @@
     "@supabase/supabase-js": "^2.45.0",
     "next": "^15.3.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
