@@ -76,14 +76,14 @@ export default function ViewsChart({ snapshots }: { snapshots: Snapshot[] }) {
   // データ点が多い場合は棒グラフが細くなるので折れ線に切り替え
   const useBar = data.length <= 90
 
-  if (allData.length < 2) return null
+  if (allData.length < 1) return null
 
   const values = data.map(d => d.views)
   const maxVal = Math.max(...values)
   const yMax = Math.ceil(maxVal * 1.1)
 
   const tickCount = Math.min(6, data.length)
-  const step = Math.floor((data.length - 1) / Math.max(tickCount - 1, 1))
+  const step = data.length > 1 ? Math.floor((data.length - 1) / Math.max(tickCount - 1, 1)) : 0
   const xTicks = Array.from({ length: tickCount }, (_, i) =>
     data[Math.min(i * step, data.length - 1)].date,
   )

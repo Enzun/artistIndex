@@ -64,22 +64,13 @@ function formatDateShort(dateStr: string) {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-function formatViews(v: number) {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`
-  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`
-  return v.toLocaleString()
-}
-
 function CustomTooltip({ active, payload }: TooltipProps<number, string> & { payload?: Array<{ payload: ChartPoint }> }) {
   if (!active || !payload?.length) return null
-  const { date, index, views } = payload[0].payload
+  const { date, index } = payload[0].payload
   return (
     <div className="bg-white border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
       <p className="text-dim mb-1">{formatDate(date)}</p>
       <p className="text-text font-bold tabular-nums text-sm">{index.toFixed(1)} pt</p>
-      {views != null && views > 0 && (
-        <p className="text-dim tabular-nums mt-0.5">{formatViews(views)} 再生/日</p>
-      )}
     </div>
   )
 }
