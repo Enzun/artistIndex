@@ -8,19 +8,24 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData()
   const investment_id = formData.get('investment_id') as string
+  const shares_str    = formData.get('shares') as string | null
+  const shares        = shares_str ? parseInt(shares_str, 10) : null
 
   if (!investment_id) {
     return NextResponse.json({ error: '無効なパラメータです' }, { status: 400 })
   }
 
   const { error } = await supabase.rpc('withdraw', {
-    p_user_id: user.id,
     p_investment_id: investment_id,
+    p_shares: shares,
   })
 
   if (error) {
     if (error.message.includes('investment_not_found')) {
       return NextResponse.json({ error: '既に回収済みです' }, { status: 404 })
+    }
+    if (error.message.includes('invalid_shares')) {
+      return NextResponse.json({ error: '無効な枚数です' }, { status: 400 })
     }
     return NextResponse.json({ error: '回収に失敗しました' }, { status: 500 })
   }

@@ -99,7 +99,7 @@ export default async function ArtistPage({
                         {returnPts.toLocaleString()} pt
                       </span>
                     </div>
-                    <WithdrawButton investmentId={inv.id} returnPts={returnPts} />
+                    <WithdrawButton investmentId={inv.id} totalShares={shares} currentIndex={rawIndex} />
                   </div>
                 )
               })}

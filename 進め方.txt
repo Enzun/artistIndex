@@ -1,0 +1,93 @@
+■ 現在の状態（2026-04-27時点）
+    - active: Mrs. GREEN APPLE、サンボマスター
+    - collecting: 19件（データ蓄積中）
+    - 未登録: 64件（チャンネルID調査中）
+    - 毎日0:05 JST に自動でデータ収集・指数計算が動いている
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ アーティスト追加の流れ
+
+    【新規アーティストを追加する】
+    1. チャンネルIDを確認（YouTube の UC から始まるID）
+    2. JSONファイルを用意
+           例: data/artists.json
+           [{ "name": "YOASOBI", "channel_id": "UCvP_hWke8f5_9yVvX7T7vLw" }, ...]
+    3. 一括登録（collecting モードで登録される）
+           npx tsx --env-file=.env scripts/bulk_add_artists.ts data/artists.json
+    4. 翌日から自動でデータ収集が始まる
+    5. 1〜2週間後、公開したいアーティストを active に切り替える
+           npx tsx --env-file=.env scripts/activate_artist.ts
+           （引数なしで一覧表示 → IDをコピーして実行）
+           npx tsx --env-file=.env scripts/activate_artist.ts <artist_id>
+
+    【1人だけ追加する場合】
+    - collecting モード（データ収集のみ）
+          npx tsx --env-file=.env scripts/add_artist.ts <channel_id> "アーティスト名"
+    - active モード（即公開）
+          npx tsx --env-file=.env scripts/add_artist.ts <channel_id> "アーティスト名" --active
+
+    【過去の月次データを入れたい場合】
+    - data/<name>_monthly.json を用意（フォーマットは data/mga_monthly.json 参照）
+    - dry-run で確認してから本実行
+          npx tsx --env-file=.env scripts/import_social_blade.ts <artist_id> --file data/<name>_monthly.json --dry-run
+          npx tsx --env-file=.env scripts/import_social_blade.ts <artist_id> --file data/<name>_monthly.json
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 公開前にやること（優先順）
+
+    1. アーティストを増やす
+        - 64件のチャンネルID修正 → bulk_add_artists.ts で登録
+        - collecting期間（目安：1〜2週間）でデータを溜める
+        - activate_artist.ts で順次 active に切り替え
+
+    2. アーティストページにYouTube情報を表示
+        - サムネイル・チャンネル登録者数・総再生数
+        - YouTube APIから取得済みのデータを活用
+
+    3. 検索・絞り込み機能
+        - アーティスト名で検索
+        - 指数順・名前順などソート
+
+    4. 投資履歴の表示
+        - ポートフォリオページに購入日・売却損益の履歴
+
+    5. OGP設定
+        - アーティストページ：アーティスト名＋指数＋ミニチャート
+        - トップページ：アプリの説明画像
+
+    6. ランディングページ
+        - アプリの説明
+        - サインアップ・ログインへの誘導
+
+    7. 取引時間制限
+        - 6時〜25時のみ invest/withdraw を受け付ける
+
+    8. 初期付与ポイントの調整
+        - 現在1000pt（MGA1枚で約807pt消費）
+        - 複数アーティストを試せる程度に増やす
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 公開後すぐにやること
+
+    - シェアボタン（購入・売却時）
+    - ウォッチリスト
+    - フィードバック収集の導線
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 技術的な積み残し・注意点
+
+    - サンボマスターのmonthly historyデータ未投入（任意）
+    - 将来hourly化するときはview_snapshotsのsnapshot_date(DATE)を
+      snapshot_at(TIMESTAMPTZ)に変更するmigrationが必要
+    - YouTube APIクォータ：デフォルト10,000units/日
+      1000アーティストでも1日20units（50件バッチ）なので余裕あり
+    - Vercel Hobbyプランのcronは2本まで（現在2本使用中）
+    - チャンネルBAN・削除時の扱い未対応
+        現状：fetchがスキップ → 指数が据え置きになる（暴落しない）
+        本来：0再生扱いにして暴落させるべきだが、API障害との区別が難しいため保留
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
