@@ -55,7 +55,7 @@ export default function InvestmentCard({ artistId, investments, currentIndex }: 
         </span>
       </div>
 
-      {/* 行2: 枚数セレクター + 回収ボタン */}
+      {/* 行2: 枚数入力 + 回収ボタン */}
       <div className="flex items-center gap-2">
         <div className="flex items-center border border-border rounded-lg overflow-hidden bg-white">
           <button
@@ -63,7 +63,17 @@ export default function InvestmentCard({ artistId, investments, currentIndex }: 
             disabled={loading || shares <= 1}
             className="px-3 py-1.5 text-sm text-dim hover:text-text disabled:opacity-30 transition-colors"
           >−</button>
-          <span className="px-2 py-1.5 text-sm tabular-nums min-w-[3rem] text-center">{shares}</span>
+          <input
+            type="number"
+            min={1}
+            max={totalShares}
+            value={shares}
+            onChange={(e) => {
+              const v = parseInt(e.target.value)
+              if (!isNaN(v)) setShares(Math.min(totalShares, Math.max(1, v)))
+            }}
+            className="w-16 py-1.5 text-sm tabular-nums text-center focus:outline-none bg-transparent"
+          />
           <button
             onClick={() => setShares(s => Math.min(totalShares, s + 1))}
             disabled={loading || shares >= totalShares}

@@ -59,6 +59,7 @@ export default async function ArtistPage({
   // 前日比
   const withIndex = (snapshots ?? []).filter(s => s.index_value !== null)
   const prevIndexValue = withIndex.at(-2)?.index_value as number | undefined
+  const dayChangePt  = prevIndexValue ? Math.floor(rawIndex) - Math.floor(prevIndexValue) : null
   const dayChangePct = prevIndexValue ? ((rawIndex - prevIndexValue) / prevIndexValue) * 100 : null
 
   // 最新の総再生数
@@ -87,9 +88,9 @@ export default async function ArtistPage({
         <p className="text-5xl font-bold tabular-nums text-mga leading-none">
           {displayIndex} <span className="text-2xl font-semibold">pt</span>
         </p>
-        {dayChangePct !== null && (
+        {dayChangePct !== null && dayChangePt !== null && (
           <p className={`text-sm font-medium tabular-nums mb-1 ${dayChangePct >= 0 ? 'text-mga' : 'text-accent'}`}>
-            {dayChangePct >= 0 ? '+' : ''}{dayChangePct.toFixed(2)}%
+            前日比 {dayChangePt >= 0 ? '+' : ''}{dayChangePt.toLocaleString()}pt {dayChangePct >= 0 ? '+' : ''}{dayChangePct.toFixed(2)}%
           </p>
         )}
       </div>

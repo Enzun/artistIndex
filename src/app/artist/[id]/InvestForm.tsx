@@ -61,6 +61,7 @@ export default function InvestForm({
           <input
             type="number"
             min={1}
+            max={100000}
             required
             placeholder="枚数を入力"
             value={shares}
