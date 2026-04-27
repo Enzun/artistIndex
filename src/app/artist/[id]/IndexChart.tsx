@@ -27,9 +27,9 @@ function CustomTooltip({ active, payload }: TooltipProps<number, string> & { pay
   if (!active || !payload?.length) return null
   const { date, index } = payload[0].payload as { date: string; index: number }
   return (
-    <div className="bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 shadow-xl text-xs">
-      <p className="text-[#666] mb-1">{formatDate(date)}</p>
-      <p className="text-white font-bold tabular-nums text-sm">{Math.floor(index)}</p>
+    <div className="bg-white border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
+      <p className="text-dim mb-1">{formatDate(date)}</p>
+      <p className="text-text font-bold tabular-nums text-sm">{Math.floor(index)}</p>
     </div>
   )
 }
@@ -39,7 +39,7 @@ function CustomDot(props: {
 }) {
   const { cx, cy, index, dataLength } = props
   if (index !== (dataLength ?? 0) - 1) return null
-  return <circle cx={cx} cy={cy} r={4} fill="#4ade80" stroke="#0f0f0f" strokeWidth={2} />
+  return <circle cx={cx} cy={cy} r={4} fill="#16a34a" stroke="#ffffff" strokeWidth={2} />
 }
 
 export default function IndexChart({ snapshots }: { snapshots: Snapshot[] }) {
@@ -74,33 +74,33 @@ export default function IndexChart({ snapshots }: { snapshots: Snapshot[] }) {
       <p className="text-xs text-dim mb-4">指数推移</p>
       <ResponsiveContainer width="100%" height={160}>
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e4e8" vertical={false} />
           <XAxis
             dataKey="date"
             ticks={xTicks}
             tickFormatter={formatDateShort}
-            tick={{ fill: '#555', fontSize: 10 }}
+            tick={{ fill: '#6b7280', fontSize: 10 }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             domain={[yMin, yMax]}
-            tick={{ fill: '#555', fontSize: 10 }}
+            tick={{ fill: '#6b7280', fontSize: 10 }}
             axisLine={false}
             tickLine={false}
             width={40}
           />
           <Tooltip
             content={<CustomTooltip />}
-            cursor={{ stroke: '#333', strokeWidth: 1 }}
+            cursor={{ stroke: '#e2e4e8', strokeWidth: 1 }}
           />
           <Line
             type="monotone"
             dataKey="index"
-            stroke="#4ade80"
+            stroke="#16a34a"
             strokeWidth={1.5}
             dot={<CustomDot dataLength={data.length} />}
-            activeDot={{ r: 4, fill: '#4ade80', stroke: '#0f0f0f', strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: '#16a34a', stroke: '#ffffff', strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>
