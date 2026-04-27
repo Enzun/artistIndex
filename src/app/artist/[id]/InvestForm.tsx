@@ -42,31 +42,35 @@ export default function InvestForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-      <p className="text-xs text-dim">1枚 = {pricePerShare.toLocaleString()} pt</p>
-      <div className="flex gap-2 items-center">
-        <input
-          type="number"
-          min={1}
-          required
-          placeholder="枚数"
-          value={shares}
-          onChange={(e) => setShares(e.target.value)}
-          className="flex-1 bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-dim focus:outline-none focus:border-dim"
-        />
-        <span className="text-sm text-dim whitespace-nowrap">枚</span>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 flex items-center border border-border rounded-lg overflow-hidden bg-white">
+          <input
+            type="number"
+            min={1}
+            required
+            placeholder="枚数を入力"
+            value={shares}
+            onChange={(e) => setShares(e.target.value)}
+            className="flex-1 px-3 py-2 text-sm text-text placeholder-dim focus:outline-none bg-transparent"
+          />
+          <span className="pr-3 text-sm text-dim">枚</span>
+        </div>
+        <button
+          type="submit"
+          disabled={loading || n < 1}
+          className="bg-mga/10 border border-mga/30 text-mga rounded-lg px-4 py-2 text-sm font-medium hover:bg-mga/20 transition-colors disabled:opacity-50 whitespace-nowrap"
+        >
+          {loading ? '処理中...' : '購入'}
+        </button>
       </div>
-      {n > 0 && (
-        <p className="text-xs text-dim">合計 {totalCost.toLocaleString()} pt</p>
-      )}
+      <div className="flex justify-between text-xs text-dim px-0.5">
+        <span>1枚 = {pricePerShare.toLocaleString()} pt</span>
+        <span className={`tabular-nums font-medium ${n > 0 ? 'text-text' : ''}`}>
+          合計 {totalCost > 0 ? totalCost.toLocaleString() : '—'} pt
+        </span>
+      </div>
       {error && <p className="text-accent text-xs">{error}</p>}
-      <button
-        type="submit"
-        disabled={loading || n < 1}
-        className="bg-mga/10 border border-mga/30 text-mga rounded-lg py-2 text-sm font-medium hover:bg-mga/20 transition-colors disabled:opacity-50"
-      >
-        {loading ? '処理中...' : `指数 ${pricePerShare} で購入する`}
-      </button>
     </form>
   )
 }

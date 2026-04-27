@@ -129,6 +129,28 @@ function generateDailyRecords(
   }
   daily.sort((a, b) => a.date.localeCompare(b.date))
 
+  // 月次データの最終日〜追加日の前日までのギャップを直近平均で補完
+  if (daily.length > 0) {
+    const lastDate = daily.at(-1)!.date
+    const dayBefore = new Date(additionDate)
+    dayBefore.setDate(dayBefore.getDate() - 1)
+    const dayBeforeStr = dayBefore.toISOString().split('T')[0]
+
+    if (lastDate < dayBeforeStr) {
+      const recentAvg = Math.round(
+        daily.slice(-30).reduce((s, r) => s + r.daily_increase, 0) / Math.min(30, daily.length)
+      )
+      const cur = new Date(lastDate)
+      cur.setDate(cur.getDate() + 1)
+      while (cur.toISOString().split('T')[0] <= dayBeforeStr) {
+        daily.push({ date: cur.toISOString().split('T')[0], daily_increase: recentAvg, total_views: 0 })
+        cur.setDate(cur.getDate() + 1)
+      }
+      daily.sort((a, b) => a.date.localeCompare(b.date))
+      console.log(`  ギャップ補完: ${new Date(lastDate).toISOString().split('T')[0]} 〜 ${dayBeforeStr} (${recentAvg.toLocaleString()}/日)`)
+    }
+  }
+
   // 追加日の total_views を基準に、前後を積算して total_views を推定
   // 追加日以前: total_views[t] = total_views[additionDate] - sum(daily_increase[t+1..additionDate])
   // 追加日以後: total_views[t] = total_views[additionDate] + sum(daily_increase[additionDate+1..t])
