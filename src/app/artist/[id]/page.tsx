@@ -50,7 +50,7 @@ export default async function ArtistPage({
     .select('index_value, snapshot_date, daily_increase')
     .eq('artist_id', id)
     .order('snapshot_date', { ascending: true })
-    .limit(90)
+    .limit(400)
 
   const { data: { user } } = await supabase.auth.getUser()
 
