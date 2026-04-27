@@ -111,7 +111,7 @@ export default async function AdminPage() {
                 <tr key={artist.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-surface2/50'}`}>
                   <td className="px-4 py-2.5">
                     <a
-                      href={`/artist/${artist.id}`}
+                      href={`/admin/artist/${artist.id}`}
                       className="hover:underline font-medium"
                     >
                       {artist.name}
