@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import type { ViewSnapshot, Investment } from '@/lib/types'
 import InvestForm from './InvestForm'
-import WithdrawButton from './WithdrawButton'
+import InvestmentCard from './InvestmentCard'
 import IndexChart from './IndexChart'
 import ViewsChart from './ViewsChart'
 
@@ -75,32 +75,15 @@ export default async function ArtistPage({
           {/* 保有カード一覧 */}
           {activeInvestments.length > 0 && (
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-dim px-1">保有カード</p>
-              {activeInvestments.map((inv) => {
-                const shares = Math.round(inv.points_invested / inv.index_at_entry)
-                const returnPts = Math.round(inv.points_invested * (rawIndex / inv.index_at_entry))
-                const changePct = (returnPts / inv.points_invested - 1) * 100
-                return (
-                  <div key={inv.id} className="bg-surface border border-border rounded-xl p-5">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="text-sm font-semibold tabular-nums">{shares.toLocaleString()} 枚</p>
-                        <p className="text-xs text-dim mt-0.5">購入時指数: {Math.floor(inv.index_at_entry)}</p>
-                      </div>
-                      <span className={`text-sm font-bold tabular-nums ${changePct >= 0 ? 'text-mga' : 'text-accent'}`}>
-                        {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm mb-3">
-                      <span className="text-dim">現在の価値</span>
-                      <span className={returnPts >= inv.points_invested ? 'text-mga' : 'text-accent'}>
-                        {returnPts.toLocaleString()} pt
-                      </span>
-                    </div>
-                    <WithdrawButton investmentId={inv.id} totalShares={shares} currentIndex={rawIndex} />
-                  </div>
-                )
-              })}
+              {activeInvestments.map((inv) => (
+                <InvestmentCard
+                  key={inv.id}
+                  investmentId={inv.id}
+                  pointsInvested={inv.points_invested}
+                  indexAtEntry={inv.index_at_entry}
+                  currentIndex={rawIndex}
+                />
+              ))}
             </div>
           )}
         </div>
