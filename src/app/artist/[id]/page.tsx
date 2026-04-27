@@ -21,7 +21,7 @@ export default async function ArtistPage({
     .eq('id', id)
     .single()
 
-  if (!artist) notFound()
+  if (!artist || artist.status !== 'active') notFound()
 
   const { data: snapshots } = await supabase
     .from('view_snapshots')

@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
 
   const { artist_id, shares } = await request.json()
 
-  if (!artist_id || !shares || shares < 1) {
+  if (!artist_id || !shares || !Number.isInteger(shares) || shares < 1) {
     return NextResponse.json({ error: '無効なパラメータです' }, { status: 400 })
   }
 

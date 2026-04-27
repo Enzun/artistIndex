@@ -9,18 +9,19 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { artist_id, points } = body
 
-  if (!artist_id || !points || points < 1) {
+  if (!artist_id || !points || !Number.isInteger(points) || points < 1) {
     return NextResponse.json({ error: '無効なパラメータです' }, { status: 400 })
   }
 
   // get current index
   const { data: artist } = await supabase
     .from('artists')
-    .select('current_index')
+    .select('current_index, status')
     .eq('id', artist_id)
     .single()
 
   if (!artist) return NextResponse.json({ error: 'アーティストが見つかりません' }, { status: 404 })
+  if (artist.status !== 'active') return NextResponse.json({ error: '購入できないアーティストです' }, { status: 403 })
 
   const { error } = await supabase.rpc('invest', {
     p_user_id: user.id,
