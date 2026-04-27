@@ -23,8 +23,9 @@ export async function GET(request: Request) {
   const logger = new CronLogger('calc', sb)
   await logger.start()
 
-  const today = new Date().toISOString().split('T')[0]
-  const baselineFrom = new Date(Date.now() - BASELINE_DAYS * 86400_000)
+  const jstNow = Date.now() + 9 * 60 * 60 * 1000
+  const today = new Date(jstNow).toISOString().split('T')[0] // JST
+  const baselineFrom = new Date(jstNow - BASELINE_DAYS * 86400_000)
     .toISOString().split('T')[0]
 
   const summary: Record<string, unknown> = { date: today, ok: 0, skipped: 0, error: 0, errors: [] as string[] }

@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   const logger = new CronLogger('fetch', sb)
   await logger.start()
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0] // JST
   const summary: Record<string, unknown> = { date: today, ok: 0, error: 0, errors: [] as string[] }
 
   try {
