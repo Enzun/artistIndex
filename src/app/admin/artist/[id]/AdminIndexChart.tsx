@@ -19,24 +19,26 @@ const K = 3
 const BASELINE = 180
 
 // daily_increase だけを使って A2 式をその場で計算（DB書き込みなし）
-// 開始日=100pt で正規化
+// 開始日=100pt で正規化。初日 daily_increase=0 でも起点として使う
 function calcPreview(snapshots: Snapshot[]): { date: string; index: number }[] {
   const data = snapshots
-    .filter(s => (s.daily_increase ?? 0) > 0)
-  if (data.length < 2) return []
+    .filter(s => s.daily_increase != null)
+    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+  if (data.length < 1) return []
 
   const result: { date: string; index: number }[] = []
   let idx = 100
+  result.push({ date: data[0].snapshot_date, index: 100 })
 
-  for (let i = 0; i < data.length; i++) {
-    if (i === 0) {
-      result.push({ date: data[i].snapshot_date, index: 100 })
-      continue
+  for (let i = 1; i < data.length; i++) {
+    const d = data[i].daily_increase ?? 0
+    if (d > 0) {
+      const hist = data.slice(Math.max(0, i - BASELINE), i).filter(r => (r.daily_increase ?? 0) > 0)
+      if (hist.length > 0) {
+        const B = hist.reduce((s, r) => s + (r.daily_increase ?? 0), 0) / hist.length
+        idx = idx * Math.pow(d / B, K / 365)
+      }
     }
-    const d = data[i].daily_increase!
-    const histSlice = data.slice(Math.max(0, i - BASELINE), i)
-    const B = histSlice.reduce((s, r) => s + (r.daily_increase ?? 0), 0) / histSlice.length
-    if (B > 0) idx = idx * Math.pow(d / B, K / 365)
     result.push({ date: data[i].snapshot_date, index: Math.round(idx * 100) / 100 })
   }
   return result
