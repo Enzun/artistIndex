@@ -5,6 +5,7 @@ import InvestForm from './InvestForm'
 import InvestmentCard from './InvestmentCard'
 import IndexChart from './IndexChart'
 import ViewsChart from './ViewsChart'
+import ArtistInfo from './ArtistInfo'
 
 export default async function ArtistPage({
   params,
@@ -24,7 +25,7 @@ export default async function ArtistPage({
 
   const { data: snapshots } = await supabase
     .from('view_snapshots')
-    .select('index_value, snapshot_date, daily_increase')
+    .select('index_value, snapshot_date, daily_increase, total_views')
     .eq('artist_id', id)
     .order('snapshot_date', { ascending: true })
     .limit(400)
@@ -48,19 +49,50 @@ export default async function ArtistPage({
       .eq('user_id', user.id)
       .eq('artist_id', id)
       .eq('status', 'active')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
     activeInvestments = (invList ?? []) as Investment[]
   }
 
   const rawIndex = artist.current_index as number
   const displayIndex = Math.floor(rawIndex)
 
+  // 前日比
+  const withIndex = (snapshots ?? []).filter(s => s.index_value !== null)
+  const prevIndexValue = withIndex.at(-2)?.index_value as number | undefined
+  const dayChangePct = prevIndexValue ? ((rawIndex - prevIndexValue) / prevIndexValue) * 100 : null
+
+  // 最新の総再生数
+  const latestTotalViews = (snapshots ?? []).at(-1)?.total_views as number ?? 0
+
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">{artist.name}</h1>
-      <p className="text-5xl font-bold tabular-nums text-mga mb-6 mt-3">
-        {displayIndex}
-      </p>
+      {/* アーティスト名 + YouTube リンク */}
+      <div className="flex items-center gap-2 mb-1">
+        <h1 className="text-2xl font-bold">{artist.name}</h1>
+        <a
+          href={`https://www.youtube.com/channel/${artist.youtube_channel_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-dim hover:text-text transition-colors flex-shrink-0"
+          title="YouTubeチャンネルを開く"
+        >
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          </svg>
+        </a>
+      </div>
+
+      {/* 指数 + 前日比 */}
+      <div className="flex items-end gap-3 mb-6 mt-2">
+        <p className="text-5xl font-bold tabular-nums text-mga leading-none">
+          {displayIndex} <span className="text-2xl font-semibold">pt</span>
+        </p>
+        {dayChangePct !== null && (
+          <p className={`text-sm font-medium tabular-nums mb-1 ${dayChangePct >= 0 ? 'text-mga' : 'text-accent'}`}>
+            {dayChangePct >= 0 ? '+' : ''}{dayChangePct.toFixed(2)}%
+          </p>
+        )}
+      </div>
 
       <IndexChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
       <ViewsChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
@@ -72,19 +104,13 @@ export default async function ArtistPage({
             <InvestForm artistId={id} currentIndex={rawIndex} freePoints={userProfile?.free_points ?? 0} />
           </div>
 
-          {/* 保有カード一覧 */}
+          {/* 保有カード（集約表示） */}
           {activeInvestments.length > 0 && (
-            <div className="flex flex-col gap-3">
-              {activeInvestments.map((inv) => (
-                <InvestmentCard
-                  key={inv.id}
-                  investmentId={inv.id}
-                  pointsInvested={inv.points_invested}
-                  indexAtEntry={inv.index_at_entry}
-                  currentIndex={rawIndex}
-                />
-              ))}
-            </div>
+            <InvestmentCard
+              artistId={id}
+              investments={activeInvestments}
+              currentIndex={rawIndex}
+            />
           )}
         </div>
       ) : (
@@ -95,6 +121,11 @@ export default async function ArtistPage({
           </a>
         </div>
       )}
+
+      {/* アーティスト情報 */}
+      <div className="mt-4">
+        <ArtistInfo channelId={artist.youtube_channel_id} totalViews={latestTotalViews} />
+      </div>
     </div>
   )
 }
