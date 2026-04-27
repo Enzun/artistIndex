@@ -104,6 +104,7 @@ async function main() {
       })
     }
 
+    existingIds.add(info.resolvedId)  // 同一実行内の重複も防ぐ
     console.log(`  OK           ${name}  (${info.totalViews.toLocaleString()} views)`)
     added++
 
