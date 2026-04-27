@@ -174,7 +174,29 @@ function calcIndexValues(
     if (hist.length > BASELINE_DAYS) hist.shift()
   }
 
-  const anchor = raw.get(additionDate)
+  // 追加日が履歴範囲外の場合、直近平均で外挿して追加日まで延長
+  let anchor = raw.get(additionDate)
+  if (!anchor) {
+    const lastRec = daily.at(-1)
+    if (lastRec) {
+      let curDate = lastRec.date
+      let curIdx = raw.get(curDate)!
+      const recentMean = mean(hist.slice(-30).filter(v => v > 0))
+      while (curDate < additionDate) {
+        const d = new Date(curDate)
+        d.setDate(d.getDate() + 1)
+        curDate = d.toISOString().split('T')[0]
+        const B = mean(hist)
+        if (recentMean > 0 && B > 0) {
+          curIdx *= Math.pow(recentMean / B, K / 365)
+        }
+        raw.set(curDate, curIdx)
+        hist.push(recentMean)
+        if (hist.length > BASELINE_DAYS) hist.shift()
+      }
+      anchor = raw.get(additionDate)
+    }
+  }
   if (!anchor || anchor === 0) return raw
   const scale = initialIndex / anchor
 
@@ -192,14 +214,7 @@ async function importToDb(
   indexValues: Map<string, number>,
   additionDate: string,
 ): Promise<void> {
-  // 既存レコードを取得（スキップ判定用）
-  const { data: existing } = await supabase
-    .from('view_snapshots')
-    .select('snapshot_date')
-    .eq('artist_id', artistId)
-  const existingDates = new Set((existing ?? []).map(r => r.snapshot_date))
-
-  let inserted = 0
+  let upserted = 0
   let skipped = 0
 
   for (const rec of daily) {
@@ -207,29 +222,26 @@ async function importToDb(
       skipped++
       continue  // 追加日以降は実データ優先
     }
-    if (existingDates.has(rec.date)) {
-      skipped++
-      continue
-    }
 
     const index_value = indexValues.get(rec.date) ?? null
 
-    const { error } = await supabase.from('view_snapshots').insert({
+    // 既存レコードは index_value のみ更新、新規は全列挿入
+    const { error } = await supabase.from('view_snapshots').upsert({
       artist_id: artistId,
       total_views: rec.total_views,
       daily_increase: rec.daily_increase,
       index_value,
       snapshot_date: rec.date,
-    })
+    }, { onConflict: 'artist_id,snapshot_date' })
 
     if (error) {
       console.error(`  エラー (${rec.date}): ${error.message}`)
     } else {
-      inserted++
+      upserted++
     }
   }
 
-  console.log(`  挿入: ${inserted}件 / スキップ: ${skipped}件`)
+  console.log(`  upsert: ${upserted}件 / スキップ: ${skipped}件`)
 }
 
 // ── メイン ────────────────────────────────────────────────────────────────────
@@ -273,16 +285,19 @@ async function main() {
   }
   console.log(`\nアーティスト: ${artist.name} (${artist.youtube_channel_id})`)
 
-  // 追加日のスナップショットから total_views を取得
+  // 追加日 = artist.created_at（歴史データを入れても変わらない基準日）
+  const additionDate = artist.created_at.slice(0, 10)
+
+  // 追加日のスナップショットから total_views を取得（なければ直後の実データを使う）
   const { data: addSnap } = await supabase
     .from('view_snapshots')
     .select('total_views, snapshot_date')
     .eq('artist_id', artistId)
+    .gte('snapshot_date', additionDate)
     .order('snapshot_date', { ascending: true })
     .limit(1)
-    .single()
+    .maybeSingle()
 
-  const additionDate = addSnap?.snapshot_date ?? artist.created_at.slice(0, 10)
   const totalViewsAtAddition = BigInt(addSnap?.total_views ?? 0)
   console.log(`追加日: ${additionDate} / 総再生数: ${Number(totalViewsAtAddition).toLocaleString()}`)
 
