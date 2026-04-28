@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { BASE_SLOTS } from '@/lib/titles'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -22,6 +23,30 @@ export async function POST(request: NextRequest) {
 
   if (!artist) return NextResponse.json({ error: 'アーティストが見つかりません' }, { status: 404 })
   if (artist.status !== 'active') return NextResponse.json({ error: '購入できないアーティストです' }, { status: 403 })
+
+  // 枠チェック: 新しいアーティストの場合のみ確認
+  const { data: activeInvs } = await supabase
+    .from('investments')
+    .select('artist_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+
+  const holdingArtistIds = new Set((activeInvs ?? []).map(i => i.artist_id))
+
+  if (!holdingArtistIds.has(artist_id)) {
+    const { data: slotsRow } = await supabase
+      .from('user_slots')
+      .select('point_slots, paid_slots')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const totalSlots = BASE_SLOTS + (slotsRow?.point_slots ?? 0) + (slotsRow?.paid_slots ?? 0)
+    if (holdingArtistIds.size >= totalSlots) {
+      return NextResponse.json(
+        { error: `保有枠が上限（${totalSlots}組）です。ポートフォリオから枠を追加してください。` },
+        { status: 400 },
+      )
+    }
+  }
 
   const { error } = await supabase.rpc('invest', {
     p_user_id: user.id,

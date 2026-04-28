@@ -8,11 +8,10 @@ export default async function PortfolioPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('free_points')
-    .eq('id', user.id)
-    .single()
+  const [{ data: profile }, { data: slotsRow }] = await Promise.all([
+    supabase.from('users').select('free_points').eq('id', user.id).single(),
+    supabase.from('user_slots').select('point_slots').eq('user_id', user.id).maybeSingle(),
+  ])
 
   const { data: investments } = await supabase
     .from('investments')
@@ -97,7 +96,12 @@ export default async function PortfolioPage() {
         ))}
       </div>
 
-      <PortfolioTabs holdings={holdings} history={historyItems} />
+      <PortfolioTabs
+        holdings={holdings}
+        history={historyItems}
+        pointSlots={slotsRow?.point_slots ?? 0}
+        freePoints={freePoints}
+      />
     </div>
   )
 }

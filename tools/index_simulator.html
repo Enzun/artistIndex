@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Artist Index シミュレーター</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #111; padding: 24px; }
+  h1 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+
+  .panel { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; }
+  .panel h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 14px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .field label span { font-weight: 700; }
+  input[type=range] { width: 100%; accent-color: #111; }
+  .hint { font-size: 11px; color: #999; margin-top: 4px; }
+
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .btn {
+    padding: 5px 10px; border-radius: 6px; border: 1px solid #ddd;
+    font-size: 12px; cursor: pointer; background: #fff; transition: all .15s;
+  }
+  .btn:hover { border-color: #999; }
+  .btn.active-a { background: #111; color: #fff; border-color: #111; }
+  .btn.active-b { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .btn.active   { background: #111; color: #fff; border-color: #111; }
+  .btn.active-c { background: #16a34a; color: #fff; border-color: #16a34a; }
+  .val.c { border-top: 2px solid #16a34a; }
+
+  hr { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+
+  /* 2列比較 stats */
+  .stats-header { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; text-align: center; margin-bottom: 6px; }
+  .stats-header span { font-size: 10px; color: #888; }
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+  .stats-row .label { font-size: 11px; color: #888; display: flex; align-items: center; }
+  .stats-row .val { background: #f8f8f8; border-radius: 6px; padding: 6px 4px; text-align: center; font-size: 13px; font-weight: 700; tabular-nums: 1; }
+  .val.up { color: #16a34a; }
+  .val.down { color: #dc2626; }
+  .val.a { border-top: 2px solid #111; }
+  .val.b { border-top: 2px solid #2563eb; }
+
+  .charts { display: flex; flex-direction: column; gap: 16px; }
+  .chart-box { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; }
+  .chart-box h3 { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .legend { display: flex; gap: 16px; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap-x: 5px; gap: 5px; font-size: 12px; }
+  .legend-dot { width: 20px; height: 2.5px; border-radius: 2px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<h1>Artist Index シミュレーター</h1>
+
+<div class="layout">
+  <div>
+    <div class="panel">
+      <h2>パラメーター</h2>
+
+      <div class="field">
+        <label>感度係数 K <span id="kVal">3</span></label>
+        <input type="range" id="k" min="0.5" max="500" step="0.5" value="3">
+        <div class="hint">大きいほど変動が激しい（現在の設定: 3）</div>
+      </div>
+
+      <div class="field">
+        <label>ベースライン日数 <span id="baselineVal">180</span> 日</label>
+        <input type="range" id="baseline" min="7" max="365" step="7" value="180">
+        <div class="hint">短いほど直近の変化に敏感（現在の設定: 180日）</div>
+      </div>
+
+      <div class="field">
+        <label>開始指数 <span id="startVal">100</span> pt</label>
+        <input type="range" id="start" min="10" max="1000" step="10" value="100">
+      </div>
+
+      <hr>
+      <h2>表示する式</h2>
+      <div class="btns">
+        <button class="btn active-a" data-formula="a">案A: べき乗</button>
+        <button class="btn active-b" data-formula="b">案B: 線形</button>
+        <button class="btn active-c" data-formula="c">案C: 移動平均</button>
+      </div>
+      <div class="hint" style="margin-top:8px">
+        A: index × (d/B)^(K/365)<br>
+        B: index × (1 + K/365 × (d/B−1))<br>
+        C: 直近7日平均 / 基準日再生数 × 100<br>
+        <span style="color:#f59e0b">※ CはK・ベースライン設定を使いません</span>
+      </div>
+
+      <hr>
+      <h2>テストデータ</h2>
+      <div class="btns" id="presetBtns">
+        <button class="btn active" data-preset="stable">安定型</button>
+        <button class="btn" data-preset="growth">成長型</button>
+        <button class="btn" data-preset="viral">バズ型</button>
+        <button class="btn" data-preset="decline">衰退型</button>
+        <button class="btn" data-preset="comeback">復活型</button>
+        <button class="btn" data-preset="volatile">乱高下</button>
+      </div>
+      <div class="hint" style="margin-top:6px" id="presetDesc">毎日ほぼ一定の再生数</div>
+
+      <hr>
+      <h2>結果比較</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;text-align:center;margin-bottom:6px">
+        <span style="font-size:10px;color:#888"></span>
+        <span style="font-size:10px;color:#888">案A</span>
+        <span style="font-size:10px;color:#888">案B</span>
+        <span style="font-size:10px;color:#888">案C</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:4px">
+        <div class="label">最終値</div>
+        <div class="val a"  id="sA_final">—</div>
+        <div class="val b"  id="sB_final">—</div>
+        <div class="val c"  id="sC_final">—</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:4px">
+        <div class="label">最高値</div>
+        <div class="val a up"   id="sA_max">—</div>
+        <div class="val b up"   id="sB_max">—</div>
+        <div class="val c up"   id="sC_max">—</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px">
+        <div class="label">最低値</div>
+        <div class="val a down" id="sA_min">—</div>
+        <div class="val b down" id="sB_min">—</div>
+        <div class="val c down" id="sC_min">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>指数推移</h3>
+      <div class="legend">
+        <div class="legend-item" id="legendA">
+          <div class="legend-dot" style="background:#111"></div>
+          <span>案A: index × (d/B)^(K/365)</span>
+        </div>
+        <div class="legend-item" id="legendB">
+          <div class="legend-dot" style="background:#2563eb"></div>
+          <span>案B: index × (1 + K/365 × (d/B−1))</span>
+        </div>
+        <div class="legend-item" id="legendC">
+          <div class="legend-dot" style="background:#16a34a"></div>
+          <span>案C: 直近7日平均 / 基準日再生数 × 100</span>
+        </div>
+      </div>
+      <canvas id="indexChart" height="200"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>日次再生数（万回）</h3>
+      <canvas id="viewsChart" height="120"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS = 365
+
+function rng(seed) {
+  let s = seed
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff }
+}
+
+const PRESETS = {
+  stable:   { desc: '毎日ほぼ一定の再生数', gen: () => { const r=rng(42); return Array.from({length:DAYS},()=>800000+(r()-0.5)*200000) } },
+  growth:   { desc: '徐々に再生数が増加',   gen: () => { const r=rng(7);  return Array.from({length:DAYS},(_,i)=>{ const b=300000+(i/DAYS)*1200000; return Math.max(0,b+(r()-0.5)*b*0.3) }) } },
+  viral:    { desc: '時々バズる、普段は低め', gen: () => { const r=rng(13); const sp=new Set([30,31,32,90,91,180,181,182,300]); return Array.from({length:DAYS},(_,i)=>{ const b=200000+(r()-0.5)*100000; if(sp.has(i)) return b*(8+r()*10); if(sp.has(i-1)||sp.has(i-2)) return b*(2+r()*3); return Math.max(0,b) }) } },
+  decline:  { desc: '徐々に再生数が減少',   gen: () => { const r=rng(99); return Array.from({length:DAYS},(_,i)=>{ const b=1200000-(i/DAYS)*900000; return Math.max(0,b+(r()-0.5)*b*0.2) }) } },
+  comeback: { desc: '低迷後に復活',          gen: () => { const r=rng(55); return Array.from({length:DAYS},(_,i)=>{ let b; if(i<120) b=900000-i*5000; else if(i<200) b=300000+(r()-0.5)*50000; else b=300000+(i-200)*8000; return Math.max(0,b+(r()-0.5)*b*0.25) }) } },
+  volatile: { desc: '再生数が激しく上下',   gen: () => { const r=rng(77); return Array.from({length:DAYS},()=>Math.max(0,500000*Math.pow(r(),0.5)+(r()-0.3)*1000000)) } },
+}
+
+// 案A: index × (d/B)^(K/365)
+function calcA(views, K, baselineDays, startIndex) {
+  let idx = startIndex
+  return views.map((v, i) => {
+    const d = Math.max(0, v)
+    const win = views.slice(Math.max(0,i-baselineDays),i).filter(x=>x>0)
+    const B = win.length ? win.reduce((s,x)=>s+x,0)/win.length : null
+    if (d > 0 && B) idx = idx * Math.pow(d/B, K/365)
+    return Math.round(idx * 100) / 100
+  })
+}
+
+// 案B: index × (1 + K/365 × (d/B - 1))
+function calcB(views, K, baselineDays, startIndex) {
+  let idx = startIndex
+  return views.map((v, i) => {
+    const d = Math.max(0, v)
+    const win = views.slice(Math.max(0,i-baselineDays),i).filter(x=>x>0)
+    const B = win.length ? win.reduce((s,x)=>s+x,0)/win.length : null
+    if (d > 0 && B) idx = Math.max(0, idx * (1 + (K/365) * (d/B - 1)))
+    return Math.round(idx * 100) / 100
+  })
+}
+
+// 案C: 基準日再生数=100pt、各日は直近7日平均 / 基準日再生数 × 100
+function calcC(views, startIndex) {
+  const baseViews = Math.max(1, views[0])
+  return views.map((_, i) => {
+    const win = views.slice(Math.max(0, i - 6), i + 1).filter(x => x > 0)
+    const avg = win.length ? win.reduce((s,x)=>s+x,0)/win.length : 0
+    return Math.round(avg / baseViews * startIndex * 100) / 100
+  })
+}
+
+// ─── グラフ ────────────────────────────────────────────────────
+const tickLabels = Array.from({length:DAYS}, (_,i) => {
+  const d = new Date(2026,0,1); d.setDate(d.getDate()+i)
+  return i%30===0 ? `${d.getMonth()+1}/${d.getDate()}` : ''
+})
+
+const indexChart = new Chart(document.getElementById('indexChart'), {
+  type: 'line',
+  data: {
+    labels: tickLabels,
+    datasets: [
+      { label:'案A', data:[], borderColor:'#111',    borderWidth:1.5, pointRadius:0, tension:0.1 },
+      { label:'案B', data:[], borderColor:'#2563eb', borderWidth:1.5, pointRadius:0, tension:0.1 },
+      { label:'案C', data:[], borderColor:'#16a34a', borderWidth:1.5, pointRadius:0, tension:0.1 },
+    ]
+  },
+  options: {
+    animation: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)} pt` } }
+    },
+    scales: {
+      x: { grid:{display:false}, ticks:{maxRotation:0, font:{size:10}} },
+      y: { grid:{color:'#f0f0f0'}, ticks:{font:{size:10}} }
+    }
+  }
+})
+
+const viewsChart = new Chart(document.getElementById('viewsChart'), {
+  type: 'bar',
+  data: { labels: tickLabels, datasets: [{ data:[], backgroundColor:'#93c5fd', borderRadius:2, barPercentage:0.8 }] },
+  options: {
+    animation: false,
+    plugins: { legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>`${(ctx.parsed.y/10000).toFixed(0)}万回` } } },
+    scales: {
+      x: { grid:{display:false}, ticks:{maxRotation:0, font:{size:10}} },
+      y: { grid:{color:'#f0f0f0'}, ticks:{font:{size:10}, callback:v=>`${(v/10000).toFixed(0)}万`} }
+    }
+  }
+})
+
+// ─── 表示制御 ─────────────────────────────────────────────────
+let showA = true, showB = true, showC = true
+let currentViews = PRESETS.stable.gen()
+
+function update() {
+  const K        = parseFloat(document.getElementById('k').value)
+  const baseline = parseInt(document.getElementById('baseline').value)
+  const start    = parseInt(document.getElementById('start').value)
+  document.getElementById('kVal').textContent        = K
+  document.getElementById('baselineVal').textContent = baseline
+  document.getElementById('startVal').textContent    = start
+
+  const indA = calcA(currentViews, K, baseline, start)
+  const indB = calcB(currentViews, K, baseline, start)
+  const indC = calcC(currentViews, start)
+
+  indexChart.data.datasets[0].data   = indA
+  indexChart.data.datasets[0].hidden = !showA
+  indexChart.data.datasets[1].data   = indB
+  indexChart.data.datasets[1].hidden = !showB
+  indexChart.data.datasets[2].data   = indC
+  indexChart.data.datasets[2].hidden = !showC
+  indexChart.update('none')
+
+  viewsChart.data.datasets[0].data = currentViews
+  viewsChart.update('none')
+
+  const fmt  = arr => arr.length ? `${Math.round(arr.at(-1))}pt` : '—'
+  const fmtM = (arr, fn) => arr.length ? `${Math.round(fn(...arr))}pt` : '—'
+
+  document.getElementById('sA_final').textContent = fmt(indA)
+  document.getElementById('sB_final').textContent = fmt(indB)
+  document.getElementById('sC_final').textContent = fmt(indC)
+  document.getElementById('sA_max').textContent   = fmtM(indA, Math.max)
+  document.getElementById('sB_max').textContent   = fmtM(indB, Math.max)
+  document.getElementById('sC_max').textContent   = fmtM(indC, Math.max)
+  document.getElementById('sA_min').textContent   = fmtM(indA, Math.min)
+  document.getElementById('sB_min').textContent   = fmtM(indB, Math.min)
+  document.getElementById('sC_min').textContent   = fmtM(indC, Math.min)
+
+  ;[['sA_final','a',indA],['sB_final','b',indB],['sC_final','c',indC]].forEach(([id,cls,arr]) => {
+    if (arr.length) {
+      const f = arr.at(-1)
+      document.getElementById(id).className = `val ${cls} ${f >= start ? 'up' : 'down'}`
+    }
+  })
+
+  document.getElementById('legendA').style.opacity = showA ? 1 : 0.3
+  document.getElementById('legendB').style.opacity = showB ? 1 : 0.3
+  document.getElementById('legendC').style.opacity = showC ? 1 : 0.3
+}
+
+// ─── イベント ─────────────────────────────────────────────────
+document.querySelectorAll('input[type=range]').forEach(el => el.addEventListener('input', update))
+
+document.querySelectorAll('[data-formula]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const f = btn.dataset.formula
+    if (f === 'a') { showA = !showA; btn.classList.toggle('active-a', showA) }
+    if (f === 'b') { showB = !showB; btn.classList.toggle('active-b', showB) }
+    if (f === 'c') { showC = !showC; btn.classList.toggle('active-c', showC) }
+    update()
+  })
+})
+
+document.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    currentViews = PRESETS[btn.dataset.preset].gen()
+    document.getElementById('presetDesc').textContent = PRESETS[btn.dataset.preset].desc
+    update()
+  })
+})
+
+update()
+</script>
+</body>
+</html>

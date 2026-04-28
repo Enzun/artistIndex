@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { slotCost, BASE_SLOTS } from '@/lib/titles'
 
 type HoldingItem = {
   id: string
@@ -24,6 +26,8 @@ type HistoryItem = {
 type Props = {
   holdings: HoldingItem[]
   history: HistoryItem[]
+  pointSlots: number
+  freePoints: number
 }
 
 const PERIODS = [
@@ -32,8 +36,28 @@ const PERIODS = [
   { label: '1ヶ月', months: 1 },
 ] as const
 
-export default function PortfolioTabs({ holdings, history }: Props) {
+export default function PortfolioTabs({ holdings, history, pointSlots, freePoints }: Props) {
   const [tab, setTab] = useState<'holdings' | 'history'>('holdings')
+  const [slotLoading, setSlotLoading] = useState(false)
+  const [slotError, setSlotError]     = useState('')
+  const router = useRouter()
+
+  const totalSlots = BASE_SLOTS + pointSlots
+  const nextCost   = slotCost(pointSlots)
+  const canBuySlot = freePoints >= nextCost
+
+  async function handleBuySlot() {
+    setSlotLoading(true)
+    setSlotError('')
+    const res = await fetch('/api/slots', { method: 'POST' })
+    const data = await res.json()
+    if (res.ok) {
+      router.refresh()
+    } else {
+      setSlotError(data.error ?? '枠の追加に失敗しました')
+    }
+    setSlotLoading(false)
+  }
   const [artistFilter, setArtistFilter] = useState('')
   const [period, setPeriod] = useState<typeof PERIODS[number]['label']>('全期間')
 
@@ -56,6 +80,19 @@ export default function PortfolioTabs({ holdings, history }: Props) {
 
   return (
     <>
+      {/* 称号 + 枠 */}
+      <div className="flex items-center justify-between mb-4">
+        <Link
+          href="/titles"
+          className="text-xs border border-border rounded-lg px-3 py-1.5 text-dim hover:border-dim hover:text-text transition-colors"
+        >
+          🏅 称号コレクション
+        </Link>
+        <div className="text-xs text-dim text-right">
+          <span>枠: {holdings.length} / {totalSlots}</span>
+        </div>
+      </div>
+
       {/* タブ */}
       <div className="flex border-b border-border mb-6">
         {(['holdings', 'history'] as const).map((t) => (
@@ -121,6 +158,18 @@ export default function PortfolioTabs({ holdings, history }: Props) {
                 </Link>
               )
             })}
+
+            {/* 枠追加カード */}
+            <button
+              onClick={handleBuySlot}
+              disabled={slotLoading || !canBuySlot}
+              className="bg-surface border border-dashed border-border rounded-xl p-5 text-center hover:border-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed w-full"
+            >
+              <p className="text-sm text-dim">
+                {slotLoading ? '処理中...' : `+ 枠を追加（${nextCost.toLocaleString()} pt）`}
+              </p>
+              {slotError && <p className="text-xs text-accent mt-1">{slotError}</p>}
+            </button>
           </div>
         )
       )}

@@ -46,13 +46,13 @@ export default async function PreviewPage() {
       <div className="bg-text text-bg rounded-xl p-4 mb-6 flex items-center justify-between gap-4">
         <p className="text-sm">
           <span className="font-semibold">気に入ったら登録してみよう。</span>
-          <span className="text-bg/60 ml-2 hidden sm:inline">無料で売買をはじめられます。</span>
+          <span className="text-bg/60 ml-2 hidden sm:inline">登録すると売買できます。</span>
         </p>
         <Link
           href="/signup"
           className="flex-shrink-0 bg-bg text-text rounded-lg px-4 py-1.5 text-xs font-semibold hover:opacity-90 transition-opacity"
         >
-          無料で始める →
+          参加する →
         </Link>
       </div>
 
@@ -95,7 +95,7 @@ export default async function PreviewPage() {
           href="/signup"
           className="inline-block bg-text text-bg rounded-xl px-8 py-3 text-sm font-semibold hover:opacity-90 transition-opacity"
         >
-          無料で始める
+          参加する
         </Link>
       </div>
     </div>

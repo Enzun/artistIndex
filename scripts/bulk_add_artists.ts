@@ -88,7 +88,6 @@ async function main() {
     if (existingIds.has(channel_id)) {
       console.log(`  SKIP (重複)      ${name}`)
       skippedDuplicate++
-      skipped.push({ name, channel_id, reason: '重複' })
       continue
     }
 

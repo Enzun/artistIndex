@@ -1,25 +1,34 @@
-■ 現在の状態（2026-04-27時点）
+■ 現在の状態（2026-04-28時点）
     - active: Mrs. GREEN APPLE、サンボマスター
-    - collecting: 19件（データ蓄積中）
-    - 未登録: 64件（チャンネルID調査中）
-    - 毎日0:05 JST に自動でデータ収集・指数計算が動いている
+    - collecting: 数十件（データ蓄積中）
+    - 毎日 0:05 JST に自動でデータ収集・指数計算が動いている（Vercel Cron）
+    - GitHub Actions の daily_update.yml は無効化済み（Vercel Cronに統一）
+    - 初期付与ポイント: 5,000pt
+    - ランディングページ（/welcome）・プレビューページ（/preview）・設定ページ（/settings）実装済み
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ■ アーティスト追加の流れ
 
-    【新規アーティストを追加する】
-    1. チャンネルIDを確認（YouTube の UC から始まるID）
-    2. JSONファイルを用意
-           例: data/artists.json
-           [{ "name": "YOASOBI", "channel_id": "UCvP_hWke8f5_9yVvX7T7vLw" }, ...]
-    3. 一括登録（collecting モードで登録される）
+    【JSONから一括登録（通常ルート）】
+    1. data/artists.json にアーティスト名とチャンネルIDを追加
+           フォーマット:
+           [
+             { "name": "YOASOBI", "channel_id": "UCvP_..." },
+             ...
+           ]
+    2. 一括登録スクリプトを実行（collecting モードで登録される）
            npx tsx --env-file=.env scripts/bulk_add_artists.ts data/artists.json
+    3. 実行後、data/bulk_add_report_YYYYMMDD-HHMMSS.json にレポートが保存される
+           - added:   追加成功
+           - skipped: 無効ID / 登録者不足 / 登録者非公開（重複は記録しない）
     4. 翌日から自動でデータ収集が始まる
-    5. 1〜2週間後、公開したいアーティストを active に切り替える
-           npx tsx --env-file=.env scripts/activate_artist.ts
-           （引数なしで一覧表示 → IDをコピーして実行）
-           npx tsx --env-file=.env scripts/activate_artist.ts <artist_id>
+
+    【スキップ基準】
+    - 重複（すでにDB登録済みのチャンネルID）
+    - 無効ID（YouTube APIに存在しないID）
+    - 登録者非公開
+    - 登録者20万人未満
 
     【1人だけ追加する場合】
     - collecting モード（データ収集のみ）
@@ -27,7 +36,7 @@
     - active モード（即公開）
           npx tsx --env-file=.env scripts/add_artist.ts <channel_id> "アーティスト名" --active
 
-    【過去の月次データを入れたい場合】
+    【過去の月次データを入れたい場合（SocialBlade等）】
     - data/<name>_monthly.json を用意（フォーマットは data/mga_monthly.json 参照）
     - dry-run で確認してから本実行
           npx tsx --env-file=.env scripts/import_social_blade.ts <artist_id> --file data/<name>_monthly.json --dry-run
@@ -35,59 +44,56 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-■ 公開前にやること（優先順）
+■ アーティスト公開の流れ
+
+    1. collecting 登録後、1〜2週間データを溜める
+    2. Admin ページ（/admin）でアーティストを選んでグラフを確認
+    3. 指数の動きが問題なければ「公開する」ボタンを押す → active に切り替わる
+    4. /preview と / のアーティスト一覧に表示される
+
+    ※ Admin パスワードは ADMIN_PASSWORD 環境変数で設定
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 今後やること（優先順）
 
     1. アーティストを増やす
-        - 64件のチャンネルID修正 → bulk_add_artists.ts で登録
+        - artists.json（209件）を bulk_add_artists.ts で順次登録
         - collecting期間（目安：1〜2週間）でデータを溜める
-        - activate_artist.ts で順次 active に切り替え
+        - Admin ページで確認しながら active に切り替え
 
-    2. アーティストページにYouTube情報を表示
+    2. アーティストページに YouTube 情報を表示
         - サムネイル・チャンネル登録者数・総再生数
-        - YouTube APIから取得済みのデータを活用
 
-    3. 検索・絞り込み機能
-        - アーティスト名で検索
-        - 指数順・名前順などソート
-
-    4. 投資履歴の表示
+    3. 投資履歴の表示
         - ポートフォリオページに購入日・売却損益の履歴
 
-    5. OGP設定
+    4. OGP 設定
         - アーティストページ：アーティスト名＋指数＋ミニチャート
         - トップページ：アプリの説明画像
 
-    6. ランディングページ
-        - アプリの説明
-        - サインアップ・ログインへの誘導
+    5. ランキング機能
+        - 指数上昇率ランキングなど
+
+    6. プレゼントポイントシステム
+        - Admin から全ユーザーに一括付与できる機能
 
     7. 取引時間制限
         - 6時〜25時のみ invest/withdraw を受け付ける
 
-    8. 初期付与ポイントの調整
-        - 現在1000pt（MGA1枚で約807pt消費）
-        - 複数アーティストを試せる程度に増やす
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-■ 公開後すぐにやること
-
-    - シェアボタン（購入・売却時）
-    - ウォッチリスト
-    - フィードバック収集の導線
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-■ 技術的な積み残し・注意点
+■ 技術的な注意点
 
     - サンボマスターのmonthly historyデータ未投入（任意）
-    - 将来hourly化するときはview_snapshotsのsnapshot_date(DATE)を
-      snapshot_at(TIMESTAMPTZ)に変更するmigrationが必要
+    - back numberのチャンネルIDが誤登録の可能性あり → Supabase で確認・修正
     - YouTube APIクォータ：デフォルト10,000units/日
-      1000アーティストでも1日20units（50件バッチ）なので余裕あり
-    - Vercel Hobbyプランのcronは2本まで（現在2本使用中）
+      1000アーティストでも1日20units（50件バッチ）で余裕あり
+    - Vercel Hobby プランのcronは2本まで（現在2本使用中: fetch・calc）
     - チャンネルBAN・削除時の扱い未対応
-        現状：fetchがスキップ → 指数が据え置きになる（暴落しない）
+        現状：fetchがスキップ → 指数が据え置きになる
         本来：0再生扱いにして暴落させるべきだが、API障害との区別が難しいため保留
+    - 将来hourly化するときは view_snapshots の snapshot_date(DATE) を
+      snapshot_at(TIMESTAMPTZ) に変更するマイグレーションが必要
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

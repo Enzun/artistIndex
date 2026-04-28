@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(CHANNEL_ID=UCpFgmZm65yOU5X-hmWkWjuw ARTIST_NAME=\"Mrs. GREEN APPLE\" npm run add-artist)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(cmd /c \"npm install dotenv\")",
+      "Bash(cmd /c \"npm install dotenv 2>&1\")",
+      "Bash(npx tsx:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(ls:*)",
+      "Bash(npm run:*)",
+      "Bash(git commit:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
