@@ -79,9 +79,6 @@ export default async function AdminArtistPage({
             >
               {artist.youtube_channel_id}
             </a>
-            {artist.description && (
-              <p className="text-xs text-dim mt-2 whitespace-pre-wrap max-w-xl">{artist.description}</p>
-            )}
           </div>
         </div>
 
@@ -151,6 +148,24 @@ export default async function AdminArtistPage({
       {/* グラフ */}
       <AdminIndexChart snapshots={snaps} />
       <ViewsChart snapshots={snaps} />
+
+      {/* アイコン + 説明文 */}
+      {(artist.thumbnail_url || artist.description) && (
+        <div className="mt-6 flex items-start gap-4">
+          {artist.thumbnail_url && (
+            <Image
+              src={artist.thumbnail_url}
+              alt={artist.name}
+              width={56}
+              height={56}
+              className="rounded-full flex-shrink-0"
+            />
+          )}
+          {artist.description && (
+            <p className="text-sm text-dim whitespace-pre-wrap">{artist.description}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
