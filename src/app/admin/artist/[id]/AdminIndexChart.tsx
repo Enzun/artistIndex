@@ -86,8 +86,8 @@ function CustomDot(props: { cx?: number; cy?: number; index?: number; dataLength
 export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }) {
   const [period, setPeriod] = useState<typeof PERIODS[number]['label']>('ALL')
 
-  const withValue = snapshots.filter(s => s.index_value !== null)
-  const useCalc = withValue.length === 0  // index_value が全 NULL → daily_increase から計算
+  const withValue = snapshots.filter(s => s.index_value !== null && s.index_value > 0)
+  const useCalc = withValue.length === 0  // index_value が全 NULL or 0 → daily_increase から計算
 
   // index_value あり: 先頭=100pt に正規化
   // index_value なし: A2 式でその場計算

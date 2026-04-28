@@ -19,15 +19,11 @@ const BATCH_SIZE = 50  // YouTube channels.list の上限
 type YTItem = {
   id: string
   statistics: { viewCount: string }
-  snippet: {
-    description: string
-    thumbnails: { high?: { url: string }; medium?: { url: string }; default?: { url: string } }
-  }
 }
 
 async function fetchBatch(channelIds: string[]): Promise<YTItem[]> {
   const url = new URL('https://www.googleapis.com/youtube/v3/channels')
-  url.searchParams.set('part', 'statistics,snippet')
+  url.searchParams.set('part', 'statistics')
   url.searchParams.set('id', channelIds.join(','))
   url.searchParams.set('key', process.env.YOUTUBE_API_KEY!)
   const res = await fetch(url.toString())
@@ -84,7 +80,6 @@ export async function GET(request: Request) {
 
     // upsert データをまとめて一括投入
     const upsertRows: { artist_id: string; total_views: number; daily_increase: number; snapshot_date: string }[] = []
-    const artistUpdates: { id: string; thumbnail_url: string | null; description: string | null }[] = []
 
     for (const chunk of chunks) {
       let items: YTItem[]
@@ -105,15 +100,6 @@ export async function GET(request: Request) {
         const dailyIncrease = prevViews !== undefined ? Math.max(totalViews - prevViews, 0) : 0
 
         upsertRows.push({ artist_id: artist.id, total_views: totalViews, daily_increase: dailyIncrease, snapshot_date: today })
-
-        // thumbnail_url と description を毎日更新
-        const thumbnails = item.snippet.thumbnails
-        const thumbnailUrl = thumbnails.high?.url ?? thumbnails.medium?.url ?? thumbnails.default?.url ?? null
-        artistUpdates.push({
-          id: artist.id,
-          thumbnail_url: thumbnailUrl,
-          description: item.snippet.description || null,
-        })
       }
     }
 
@@ -129,13 +115,6 @@ export async function GET(request: Request) {
       } else {
         summary.ok = upsertRows.length
       }
-    }
-
-    // thumbnail_url / description を一件ずつ更新
-    for (const u of artistUpdates) {
-      await sb.from('artists')
-        .update({ thumbnail_url: u.thumbnail_url, description: u.description })
-        .eq('id', u.id)
     }
 
     await logger.finish('success', summary)
