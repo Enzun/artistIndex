@@ -67,7 +67,7 @@ export default async function PreviewPage() {
           const changePct = prev ? ((latest - prev) / prev) * 100 : null
 
           return (
-            <Link key={artist.id} href="/signup">
+            <Link key={artist.id} href={`/artist/${artist.id}`}>
               <div className="bg-surface border border-border rounded-xl p-5 hover:border-dim transition-colors flex items-center justify-between">
                 <div>
                   <p className="text-sm text-dim mb-1">{artist.name}</p>
