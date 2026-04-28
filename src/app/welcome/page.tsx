@@ -33,7 +33,7 @@ export default function WelcomePage() {
             href="/signup"
             className="bg-bg text-text rounded-xl px-8 py-3 text-sm font-semibold hover:opacity-90 transition-opacity"
           >
-            無料で始める
+            5,000ptで始める
           </Link>
           <Link
             href="/preview"
@@ -64,7 +64,7 @@ export default function WelcomePage() {
           <Step
             n={1}
             title="アカウント登録"
-            desc="メールアドレスだけで OK。登録すると初期ポイントがもらえます。"
+            desc="メールアドレスだけで OK。登録すると 5,000pt がもらえます。"
           />
           <Step
             n={2}
@@ -82,13 +82,13 @@ export default function WelcomePage() {
       {/* ── CTA ── */}
       <section className="bg-surface border-t border-border px-6 py-16 text-center">
         <p className="font-bold text-lg mb-2">推しの指数、もう動いている。</p>
-        <p className="text-sm text-dim mb-8">無料で参加して、今日から売買を始めよう。</p>
+        <p className="text-sm text-dim mb-8">5,000ptもらって、今日から売買を始めよう。</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/signup"
             className="bg-text text-bg rounded-xl px-8 py-3 text-sm font-semibold hover:opacity-90 transition-opacity"
           >
-            無料で始める
+            5,000ptで始める
           </Link>
           <Link
             href="/preview"

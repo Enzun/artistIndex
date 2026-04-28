@@ -52,7 +52,12 @@ export default function SignupPage() {
           ) : (
             <>
               <h1 className="text-lg font-bold mb-1">新規登録</h1>
-              <p className="text-xs text-dim mb-6">メールアドレスだけで始められます</p>
+              <p className="text-xs text-dim mb-2">メールアドレスだけで登録できます</p>
+              <div className="bg-surface border border-border rounded-lg px-3 py-2.5 mb-4">
+                <p className="text-xs text-dim leading-relaxed">
+                  登録すると <span className="text-text font-semibold">5,000pt</span> がもらえます。ポイントがなくなると取引できなくなります（現在、ポイントの追加購入機能は準備中です）。
+                </p>
+              </div>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
                   <label className="text-xs text-dim block mb-1.5">メールアドレス</label>
