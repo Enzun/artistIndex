@@ -1,8 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// /portfolio は要ログイン
-const PROTECTED = ['/portfolio']
+// 未ログインでもアクセス可能なパス
+const PUBLIC_PATHS = ['/welcome', '/login', '/signup', '/preview', '/terms', '/privacy', '/auth', '/api']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -37,12 +37,16 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isProtected = PROTECTED.some((p) =>
-    request.nextUrl.pathname.startsWith(p),
-  )
+  const isPublic = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
 
-  if (isProtected && !user) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // 未ログイン: 非公開ページ → /welcome へ
+  if (!user && !isPublic) {
+    return NextResponse.redirect(new URL('/welcome', request.url))
+  }
+
+  // ログイン済み: login/signup → / へ
+  if (user && (pathname === '/login' || pathname === '/signup')) {
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   return response

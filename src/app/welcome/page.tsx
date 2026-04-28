@@ -25,8 +25,8 @@ export default function WelcomePage() {
           推しの勢いを、<br />指数で買え。
         </h1>
         <p className="text-bg/60 text-sm sm:text-base max-w-sm mx-auto mb-10 leading-relaxed">
-          アーティストの再生数から算出した「指数」をポイントで売買する、<br className="hidden sm:block" />
-          音楽ファンのための新しいプラットフォーム。
+          アーティストの「指数」をポイントで売買する、<br className="hidden sm:block" />
+          音楽ファンのための推し活 × トレード。
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
@@ -36,7 +36,7 @@ export default function WelcomePage() {
             無料で始める
           </Link>
           <Link
-            href="/"
+            href="/preview"
             className="border border-bg/30 text-bg rounded-xl px-8 py-3 text-sm font-medium hover:bg-bg/10 transition-colors"
           >
             まず覗いてみる →
@@ -91,7 +91,7 @@ export default function WelcomePage() {
             無料で始める
           </Link>
           <Link
-            href="/"
+            href="/preview"
             className="border border-border text-text rounded-xl px-8 py-3 text-sm font-medium hover:border-dim transition-colors"
           >
             まず覗いてみる →

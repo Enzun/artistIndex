@@ -48,22 +48,6 @@ export default async function RootLayout({
           </div>
         </nav>
 
-        {/* 未ログイン時の登録促進バナー */}
-        {!user && (
-          <div className="bg-text text-bg px-4 py-2.5 flex items-center justify-between gap-4">
-            <p className="text-xs sm:text-sm">
-              <span className="font-medium">Artist Index</span>
-              <span className="text-bg/70 ml-2">推しの指数を売買しよう</span>
-            </p>
-            <Link
-              href="/signup"
-              className="flex-shrink-0 bg-bg text-text rounded-lg px-3 py-1 text-xs font-semibold hover:opacity-90 transition-opacity"
-            >
-              無料で始める →
-            </Link>
-          </div>
-        )}
-
         <main className="max-w-3xl mx-auto px-4 py-8">
           {children}
         </main>
