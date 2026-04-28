@@ -65,7 +65,7 @@ export function positionToColor(pos: number): string {
 
 /** point_slots 個目を追加するコスト（0始まり） */
 export function slotCost(currentPointSlots: number): number {
-  return 500 * Math.pow(2, currentPointSlots)
+  return 250 * Math.pow(2, currentPointSlots)
 }
 
 /** 形のプレースホルダー絵文字（SVG実装前の仮） */
