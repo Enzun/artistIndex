@@ -124,6 +124,15 @@ export default function SettingsPage() {
     <div className="max-w-lg">
       <h1 className="text-xl font-bold mb-8">設定</h1>
 
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-dim uppercase tracking-wide mb-4">アカウント</h2>
+        <form action="/auth/signout" method="post">
+          <button className="text-sm text-dim hover:text-text transition-colors">
+            ログアウト
+          </button>
+        </form>
+      </section>
+
       <section>
         <h2 className="text-sm font-semibold text-dim uppercase tracking-wide mb-4">危険な操作</h2>
         <div className="flex flex-col gap-4">

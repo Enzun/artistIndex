@@ -32,11 +32,6 @@ export default async function RootLayout({
                 <Link href="/settings" className="text-dim hover:text-text transition-colors">
                   設定
                 </Link>
-                <form action="/auth/signout" method="post">
-                  <button className="text-dim hover:text-text transition-colors">
-                    ログアウト
-                  </button>
-                </form>
               </>
             ) : (
               <>
