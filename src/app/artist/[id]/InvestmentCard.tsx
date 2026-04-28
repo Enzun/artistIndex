@@ -36,6 +36,7 @@ export default function InvestmentCard({ artistId, investments, currentIndex }: 
       body: JSON.stringify({ artist_id: artistId, shares }),
     })
     if (res.ok) {
+      setLoading(false)
       router.refresh()
     } else {
       const data = await res.json().catch(() => ({}))

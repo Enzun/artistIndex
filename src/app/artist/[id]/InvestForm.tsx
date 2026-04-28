@@ -35,6 +35,7 @@ export default function InvestForm({
 
     if (res.ok) {
       setShares('')
+      setLoading(false)
       router.refresh()
     } else {
       const data = await res.json()

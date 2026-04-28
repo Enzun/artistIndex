@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Investment } from '@/lib/types'
+import HistorySection from './HistorySection'
 
 export default async function PortfolioPage() {
   const supabase = await createClient()
@@ -20,6 +21,13 @@ export default async function PortfolioPage() {
     .eq('user_id', user.id)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
+
+  const { data: history } = await supabase
+    .from('investments')
+    .select('id, points_invested, points_returned, created_at, withdrawn_at, artist:artists(name)')
+    .eq('user_id', user.id)
+    .eq('status', 'withdrawn')
+    .order('withdrawn_at', { ascending: false })
 
   type InvestmentWithArtist = Investment & {
     artist: { id: string; name: string; current_index: number }
@@ -124,6 +132,20 @@ export default async function PortfolioPage() {
           })}
         </div>
       )}
+
+      <HistorySection
+        items={(history ?? []).map((h) => {
+          const artist = Array.isArray(h.artist) ? h.artist[0] : h.artist
+          return {
+            id: h.id,
+            artistName: (artist as { name: string } | null)?.name ?? '—',
+            pointsInvested: h.points_invested,
+            pointsReturned: (h.points_returned as number | null) ?? 0,
+            createdAt: h.created_at,
+            withdrawnAt: (h.withdrawn_at as string | null) ?? h.created_at,
+          }
+        })}
+      />
     </div>
   )
 }
