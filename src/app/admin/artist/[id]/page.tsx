@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { ViewSnapshot } from '@/lib/types'
 import AdminIndexChart from './AdminIndexChart'
 import ViewsChart from '@/app/artist/[id]/ViewsChart'
@@ -49,25 +50,39 @@ export default async function AdminArtistPage({
       </div>
 
       <div className="flex items-start justify-between mb-6 mt-3">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold">{artist.name}</h1>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              artist.status === 'active'
-                ? 'bg-mga/10 text-mga'
-                : 'bg-surface2 text-dim border border-border'
-            }`}>
-              {artist.status}
-            </span>
+        <div className="flex items-start gap-3">
+          {artist.thumbnail_url && (
+            <Image
+              src={artist.thumbnail_url}
+              alt={artist.name}
+              width={56}
+              height={56}
+              className="rounded-full flex-shrink-0 mt-0.5"
+            />
+          )}
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-bold">{artist.name}</h1>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                artist.status === 'active'
+                  ? 'bg-mga/10 text-mga'
+                  : 'bg-surface2 text-dim border border-border'
+              }`}>
+                {artist.status}
+              </span>
+            </div>
+            <a
+              href={`https://www.youtube.com/channel/${artist.youtube_channel_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-dim hover:text-text transition-colors font-mono"
+            >
+              {artist.youtube_channel_id}
+            </a>
+            {artist.description && (
+              <p className="text-xs text-dim mt-2 whitespace-pre-wrap max-w-xl">{artist.description}</p>
+            )}
           </div>
-          <a
-            href={`https://www.youtube.com/channel/${artist.youtube_channel_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-dim hover:text-text transition-colors font-mono"
-          >
-            {artist.youtube_channel_id}
-          </a>
         </div>
 
         {artist.status === 'collecting' && (
