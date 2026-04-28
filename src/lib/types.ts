@@ -5,6 +5,8 @@ export type Artist = {
   current_index: number
   initial_index: number
   created_at: string
+  thumbnail_url: string | null
+  description: string | null
 }
 
 export type ViewSnapshot = {
