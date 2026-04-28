@@ -22,11 +22,11 @@ export default function WelcomePage() {
       <section className="bg-text text-bg px-6 py-20 text-center">
         <p className="text-xs tracking-widest uppercase text-bg/50 mb-6">Artist Index</p>
         <h1 className="text-4xl sm:text-5xl font-bold leading-tight mb-4">
-          推しの勢いを、<br />指数で買え。
+          推しの勢いを<br />指数で買え
         </h1>
         <p className="text-bg/60 text-sm sm:text-base max-w-sm mx-auto mb-10 leading-relaxed">
-          アーティストの「指数」をポイントで売買する、<br className="hidden sm:block" />
-          音楽ファンのための推し活 × トレード。
+          アーティストの「指数」をポイントで売買する<br />
+          音楽ファンのための推し活 × トレード
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
@@ -48,10 +48,10 @@ export default function WelcomePage() {
       <section className="px-6 py-16 max-w-2xl mx-auto text-center">
         <p className="text-xs tracking-widest uppercase text-dim mb-4">Concept</p>
         <p className="text-xl font-bold mb-4 leading-snug">
-          推しのバズを、リターンにする。
+          推しのバズをリターンにする
         </p>
         <p className="text-sm text-dim leading-relaxed">
-          アーティストが話題になるほど指数は上がり、あなたの保有ポイントも増える。<br />
+          アーティストが話題になるほど指数は上がり<br />あなたの保有ポイントも増える。<br />
           新曲のリリース前に買うのか、バズった後に売るのか。<br />
           音楽ファンとしての「読み」が、ここでは武器になる。
         </p>
