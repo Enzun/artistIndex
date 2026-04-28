@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import AdminArtistList from './AdminArtistList'
+import AddArtistForm from './AddArtistForm'
 
 type Artist = {
   id: string
@@ -90,6 +91,9 @@ export default async function AdminPage() {
           <p className="text-2xl font-bold text-dim">{collectingCount}</p>
         </div>
       </div>
+
+      {/* アーティスト追加 */}
+      <AddArtistForm />
 
       {/* アーティスト一覧 */}
       <AdminArtistList
