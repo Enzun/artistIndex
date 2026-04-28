@@ -11,8 +11,8 @@ import { CronLogger } from '../_lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-const K             = 3
-const BASELINE_DAYS = 180
+const K             = 30
+const BASELINE_DAYS = 14
 
 export async function GET(request: Request) {
   if (!verifyCronAuth(request)) {
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
         }
 
         const B = history.reduce((s, r) => s + Number(r.daily_increase), 0) / history.length
-        const newIndex = Number(artist.current_index) * Math.pow(d / B, K / 365)
+        const newIndex = Math.max(0, Number(artist.current_index) * (1 + (K / 365) * (d / B - 1)))
         const rounded  = Math.round(newIndex * 100) / 100
 
         await sb.from('artists').update({ current_index: rounded }).eq('id', artist.id)

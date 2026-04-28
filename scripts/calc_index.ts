@@ -3,10 +3,10 @@
  * 当日の view_snapshots をもとに指数を計算し artists.current_index を更新する。
  * fetch_views.ts の直後に実行される。
  *
- * 式: index[t+1] = index[t] × (d / B)^(k / 365)
+ * 式: index[t+1] = max(0, index[t] × (1 + K/365 × (d/B − 1)))  [案B: 線形]
  *   d : 当日の daily_increase
  *   B : 過去 BASELINE_DAYS 日間の daily_increase の平均（動的ベースライン）
- *   k : 感度係数（= 3）
+ *   K : 感度係数（= 30）
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -16,8 +16,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-const K             = 3    // 感度係数
-const BASELINE_DAYS = 180  // 動的ベースラインの参照期間（6ヶ月）
+const K             = 30   // 感度係数
+const BASELINE_DAYS = 14   // 動的ベースラインの参照期間（2週間）
 
 // ------------------------------------------------------------------
 // メイン処理
@@ -77,8 +77,7 @@ async function main() {
       }
 
       const B = history.reduce((sum, row) => sum + Number(row.daily_increase), 0) / history.length
-      const ratio    = d / B
-      const newIndex = Number(artist.current_index) * Math.pow(ratio, K / 365)
+      const newIndex = Math.max(0, Number(artist.current_index) * (1 + (K / 365) * (d / B - 1)))
       const rounded  = Math.round(newIndex * 100) / 100
 
       // artists.current_index を更新
@@ -98,7 +97,7 @@ async function main() {
 
       if (updateSnapErr) throw updateSnapErr
 
-      const changePct = ((ratio ** (K / 365) - 1) * 100).toFixed(3)
+      const changePct = ((newIndex / Number(artist.current_index) - 1) * 100).toFixed(3)
       const sign      = Number(changePct) >= 0 ? '+' : ''
       console.log(
         `  ✓ ${artist.name}: ${artist.current_index} → ${rounded} ` +

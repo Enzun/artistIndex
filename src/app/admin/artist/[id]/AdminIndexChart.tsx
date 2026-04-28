@@ -15,8 +15,8 @@ import type { TooltipProps } from 'recharts'
 
 type Snapshot = { snapshot_date: string; index_value: number | null; daily_increase?: number | null }
 
-const K = 3
-const BASELINE = 180
+const K = 30
+const BASELINE = 14
 
 type ChartPoint = { date: string; index: number; views: number | null }
 
@@ -38,7 +38,7 @@ function calcPreview(snapshots: Snapshot[]): ChartPoint[] {
       const hist = data.slice(Math.max(0, i - BASELINE), i).filter(r => (r.daily_increase ?? 0) > 0)
       if (hist.length > 0) {
         const B = hist.reduce((s, r) => s + (r.daily_increase ?? 0), 0) / hist.length
-        idx = idx * Math.pow(d / B, K / 365)
+        idx = Math.max(0, idx * (1 + (K / 365) * (d / B - 1)))
       }
     }
     result.push({ date: data[i].snapshot_date, index: Math.round(idx * 100) / 100, views: data[i].daily_increase ?? null })
