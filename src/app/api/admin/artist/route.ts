@@ -17,15 +17,18 @@ async function resolveChannel(channelInput: string) {
   const data = await res.json() as {
     items?: Array<{
       id: string
-      snippet: { title: string }
+      snippet: { title: string; description: string; thumbnails: { high?: { url: string }; medium?: { url: string }; default?: { url: string } } }
       statistics: { viewCount: string }
     }>
   }
   if (!data.items?.length) throw new Error(`チャンネルが見つかりません: ${channelInput}`)
   const item = data.items[0]
+  const thumbnails = item.snippet.thumbnails
   return {
     channelId:    item.id,
     channelTitle: item.snippet.title,
+    description:  item.snippet.description,
+    thumbnailUrl: thumbnails.high?.url ?? thumbnails.medium?.url ?? thumbnails.default?.url ?? null,
     totalViews:   parseInt(item.statistics.viewCount, 10),
   }
 }
@@ -77,6 +80,8 @@ export async function POST(request: NextRequest) {
       initial_index:      0,
       status:             'collecting',
       published_at:       null,
+      thumbnail_url:      channelInfo.thumbnailUrl,
+      description:        channelInfo.description || null,
     })
     .select('id')
     .single()

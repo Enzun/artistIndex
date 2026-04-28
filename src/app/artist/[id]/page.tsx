@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import Image from 'next/image'
 import type { ViewSnapshot, Investment } from '@/lib/types'
 import InvestForm from './InvestForm'
 import InvestmentCard from './InvestmentCard'
@@ -68,20 +69,36 @@ export default async function ArtistPage({
   return (
     <div>
       {/* アーティスト名 + YouTube リンク */}
-      <div className="flex items-center gap-2 mb-1">
-        <h1 className="text-2xl font-bold">{artist.name}</h1>
-        <a
-          href={`https://www.youtube.com/channel/${artist.youtube_channel_id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-dim hover:text-text transition-colors flex-shrink-0"
-          title="YouTubeチャンネルを開く"
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-          </svg>
-        </a>
+      <div className="flex items-center gap-3 mb-1">
+        {artist.thumbnail_url && (
+          <Image
+            src={artist.thumbnail_url}
+            alt={artist.name}
+            width={48}
+            height={48}
+            className="rounded-full flex-shrink-0"
+          />
+        )}
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">{artist.name}</h1>
+          <a
+            href={`https://www.youtube.com/channel/${artist.youtube_channel_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-dim hover:text-text transition-colors flex-shrink-0"
+            title="YouTubeチャンネルを開く"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          </a>
+        </div>
       </div>
+
+      {/* 説明文 */}
+      {artist.description && (
+        <p className="text-sm text-dim whitespace-pre-wrap mb-4 mt-2">{artist.description}</p>
+      )}
 
       {/* 指数 + 前日比 */}
       <div className="flex items-end gap-3 mb-6 mt-2">
