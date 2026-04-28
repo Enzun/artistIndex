@@ -49,7 +49,7 @@ export default async function PortfolioPage() {
 
   const grouped = Array.from(artistMap.values())
 
-  const totalEval = grouped.reduce((s, a) => s + Math.round(a.totalShares * a.currentIndex), 0)
+  const totalEval = grouped.reduce((s, a) => s + a.totalShares * Math.floor(a.currentIndex), 0)
   const freePoints = profile?.free_points ?? 0
   const totalPoints = freePoints + totalEval
 
@@ -82,7 +82,8 @@ export default async function PortfolioPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {grouped.map((a) => {
-            const currentValue = Math.round(a.totalShares * a.currentIndex)
+            const pricePerShare = Math.floor(a.currentIndex)
+            const currentValue = a.totalShares * pricePerShare
             const avgEntry = a.totalShares > 0 ? Math.floor(a.totalInvested / a.totalShares) : 0
             const pnl = currentValue - a.totalInvested
             const pnlPct = a.totalInvested > 0 ? (currentValue / a.totalInvested - 1) * 100 : 0

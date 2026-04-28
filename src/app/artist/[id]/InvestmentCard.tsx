@@ -21,8 +21,8 @@ export default function InvestmentCard({ artistId, investments, currentIndex }: 
   const [error, setError] = useState('')
   const router = useRouter()
 
-  const returnPts = Math.round(shares * currentIndex)
-  const totalValue = Math.round(totalShares * currentIndex)
+  const returnPts = shares * pricePerShare
+  const totalValue = totalShares * pricePerShare
   const totalPnL = totalValue - totalInvested
   const pnlPct = totalInvested > 0 ? (totalValue / totalInvested - 1) * 100 : 0
   const noShares = totalShares === 0
