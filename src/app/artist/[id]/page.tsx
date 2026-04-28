@@ -115,9 +115,14 @@ export default async function ArtistPage({
       ) : (
         <div className="bg-surface border border-border rounded-xl p-5 text-center">
           <p className="text-dim text-sm mb-3">カードを購入するにはログインが必要です</p>
-          <a href="/login" className="text-sm underline hover:text-text transition-colors">
-            ログイン
-          </a>
+          <div className="flex gap-4 justify-center">
+            <a href="/signup" className="text-sm bg-text text-bg rounded-lg px-4 py-1.5 hover:opacity-80 transition-opacity">
+              新規登録
+            </a>
+            <a href="/login" className="text-sm underline hover:text-text transition-colors">
+              ログイン
+            </a>
+          </div>
         </div>
       )}
 

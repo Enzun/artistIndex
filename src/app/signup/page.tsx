@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -45,11 +45,12 @@ export default function LoginPage() {
                 </svg>
               </div>
               <p className="font-semibold mb-1">メールを送信しました</p>
-              <p className="text-dim text-sm">{email} のリンクからログインしてください。</p>
+              <p className="text-dim text-sm">{email} のリンクから登録を完了してください。</p>
             </div>
           ) : (
             <>
-              <h1 className="text-lg font-bold mb-6">ログイン</h1>
+              <h1 className="text-lg font-bold mb-1">新規登録</h1>
+              <p className="text-xs text-dim mb-6">メールアドレスだけで始められます</p>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
                   <label className="text-xs text-dim block mb-1.5">メールアドレス</label>
@@ -69,18 +70,22 @@ export default function LoginPage() {
                   disabled={loading || !email}
                   className="bg-text text-bg rounded-lg py-2.5 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40"
                 >
-                  {loading ? '送信中...' : 'ログインリンクを送る'}
+                  {loading ? '送信中...' : '登録リンクを送る'}
                 </button>
               </form>
               <p className="text-center text-xs text-dim mt-6">
-                アカウントをお持ちでない方は
-                <Link href="/signup" className="text-text underline ml-1 hover:opacity-70 transition-opacity">
-                  新規登録
+                すでにアカウントをお持ちの方は
+                <Link href="/login" className="text-text underline ml-1 hover:opacity-70 transition-opacity">
+                  ログイン
                 </Link>
               </p>
             </>
           )}
         </div>
+
+        <p className="text-center text-xs text-dim mt-6 px-4">
+          登録することで利用規約およびプライバシーポリシーに同意したものとみなします。
+        </p>
       </div>
     </div>
   )

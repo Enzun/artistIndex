@@ -36,9 +36,14 @@ export default async function RootLayout({
                 </form>
               </>
             ) : (
-              <Link href="/login" className="text-dim hover:text-text transition-colors">
-                ログイン
-              </Link>
+              <>
+                <Link href="/login" className="text-dim hover:text-text transition-colors">
+                  ログイン
+                </Link>
+                <Link href="/signup" className="text-text font-medium hover:opacity-70 transition-opacity">
+                  新規登録
+                </Link>
+              </>
             )}
           </div>
         </nav>
