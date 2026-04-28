@@ -13,6 +13,8 @@ function DangerSection({
   confirmPlaceholder,
   onConfirm,
   successContent,
+  globalBusy,
+  onBusyChange,
 }: {
   title: string
   description: string
@@ -22,6 +24,8 @@ function DangerSection({
   confirmPlaceholder: string
   onConfirm: () => Promise<void>
   successContent?: React.ReactNode
+  globalBusy: boolean
+  onBusyChange: (busy: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
@@ -31,6 +35,7 @@ function DangerSection({
 
   async function handleConfirm() {
     setLoading(true)
+    onBusyChange(true)
     setError('')
     try {
       await onConfirm()
@@ -38,8 +43,8 @@ function DangerSection({
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '失敗しました')
       setLoading(false)
+      onBusyChange(false)
     }
-    // loading は done=true になったら自然に隠れるのでリセット不要
   }
 
   if (done && successContent) {
@@ -58,7 +63,8 @@ function DangerSection({
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="text-xs text-accent border border-accent/40 rounded-lg px-3 py-1.5 hover:bg-accent/5 transition-colors"
+          disabled={globalBusy}
+          className="text-xs text-accent border border-accent/40 rounded-lg px-3 py-1.5 hover:bg-accent/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {buttonLabel}
         </button>
@@ -97,6 +103,7 @@ function DangerSection({
 
 export default function SettingsPage() {
   const router = useRouter()
+  const [busy, setBusy] = useState(false)
 
   async function handleReset() {
     const res = await fetch('/api/account/reset', { method: 'POST' })
@@ -128,6 +135,8 @@ export default function SettingsPage() {
             confirmText="リセット"
             confirmPlaceholder="リセット"
             onConfirm={handleReset}
+            globalBusy={busy}
+            onBusyChange={setBusy}
             successContent={
               <div className="text-center py-2">
                 <div className="w-10 h-10 rounded-full bg-mga/10 flex items-center justify-center mx-auto mb-3">
@@ -154,6 +163,8 @@ export default function SettingsPage() {
             confirmText="アカウントを削除"
             confirmPlaceholder="アカウントを削除"
             onConfirm={handleDelete}
+            globalBusy={busy}
+            onBusyChange={setBusy}
           />
         </div>
       </section>
