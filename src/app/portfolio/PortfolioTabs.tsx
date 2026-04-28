@@ -47,6 +47,7 @@ export default function PortfolioTabs({ holdings, history, pointSlots, freePoint
   const canBuySlot = freePoints >= nextCost
 
   async function handleBuySlot() {
+    if (!confirm(`枠を1つ追加します。\n費用: ${nextCost.toLocaleString()} pt\n\nよろしいですか？`)) return
     setSlotLoading(true)
     setSlotError('')
     const res = await fetch('/api/slots', { method: 'POST' })
@@ -112,66 +113,71 @@ export default function PortfolioTabs({ holdings, history, pointSlots, freePoint
 
       {/* 保有中 */}
       {tab === 'holdings' && (
-        holdings.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-dim text-sm mb-4">まだカードを持っていません</p>
-            <Link href="/" className="text-sm underline hover:text-text transition-colors">
-              アーティスト一覧へ
-            </Link>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {holdings.map((a) => {
-              const pnl = a.currentValue - a.totalInvested
-              const pnlPct = a.totalInvested > 0 ? (a.currentValue / a.totalInvested - 1) * 100 : 0
-              const avgEntry = a.totalShares > 0 ? Math.floor(a.totalInvested / a.totalShares) : 0
-              return (
-                <Link key={a.id} href={`/artist/${a.id}`}>
-                  <div className="bg-surface border border-border rounded-xl p-5 hover:border-dim transition-colors">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-semibold">{a.name}</span>
-                      <span className={`text-sm font-bold tabular-nums ${pnlPct >= 0 ? 'text-mga' : 'text-accent'}`}>
-                        {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
-                      </span>
+        <div className="flex flex-col gap-3">
+          {/* 使用中の枠 */}
+          {holdings.map((a) => {
+            const pnl = a.currentValue - a.totalInvested
+            const pnlPct = a.totalInvested > 0 ? (a.currentValue / a.totalInvested - 1) * 100 : 0
+            const avgEntry = a.totalShares > 0 ? Math.floor(a.totalInvested / a.totalShares) : 0
+            return (
+              <Link key={a.id} href={`/artist/${a.id}`}>
+                <div className="bg-surface border border-border rounded-xl p-5 hover:border-dim transition-colors">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-semibold">{a.name}</span>
+                    <span className={`text-sm font-bold tabular-nums ${pnlPct >= 0 ? 'text-mga' : 'text-accent'}`}>
+                      {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 text-sm gap-2">
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">保有</p>
+                      <p className="tabular-nums">{a.totalShares.toLocaleString()} 枚</p>
                     </div>
-                    <div className="grid grid-cols-4 text-sm gap-2">
-                      <div>
-                        <p className="text-xs text-dim mb-0.5">保有</p>
-                        <p className="tabular-nums">{a.totalShares.toLocaleString()} 枚</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-dim mb-0.5">平均単価</p>
-                        <p className="tabular-nums">{avgEntry.toLocaleString()} pt</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-dim mb-0.5">現在値</p>
-                        <p className="tabular-nums">{Math.floor(a.currentIndex).toLocaleString()} pt</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-dim mb-0.5">総損益</p>
-                        <p className={`tabular-nums ${pnl >= 0 ? 'text-mga' : 'text-accent'}`}>
-                          {pnl >= 0 ? '+' : ''}{pnl.toLocaleString()} pt
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">平均単価</p>
+                      <p className="tabular-nums">{avgEntry.toLocaleString()} pt</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">現在値</p>
+                      <p className="tabular-nums">{Math.floor(a.currentIndex).toLocaleString()} pt</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-dim mb-0.5">総損益</p>
+                      <p className={`tabular-nums ${pnl >= 0 ? 'text-mga' : 'text-accent'}`}>
+                        {pnl >= 0 ? '+' : ''}{pnl.toLocaleString()} pt
+                      </p>
                     </div>
                   </div>
-                </Link>
-              )
-            })}
+                </div>
+              </Link>
+            )
+          })}
 
-            {/* 枠追加カード */}
-            <button
-              onClick={handleBuySlot}
-              disabled={slotLoading || !canBuySlot}
-              className="bg-surface border border-dashed border-border rounded-xl p-5 text-center hover:border-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed w-full"
-            >
-              <p className="text-sm text-dim">
-                {slotLoading ? '処理中...' : `+ 枠を追加（${nextCost.toLocaleString()} pt）`}
-              </p>
-              {slotError && <p className="text-xs text-accent mt-1">{slotError}</p>}
-            </button>
-          </div>
-        )
+          {/* 空枠 */}
+          {Array.from({ length: totalSlots - holdings.length }).map((_, i) => (
+            <Link key={`empty-${i}`} href="/">
+              <div className="bg-surface border border-dashed border-border rounded-xl p-5 text-center hover:border-dim transition-colors">
+                <p className="text-sm text-dim">空き枠 — アーティストを探す</p>
+              </div>
+            </Link>
+          ))}
+
+          {/* 枠追加カード */}
+          <button
+            onClick={handleBuySlot}
+            disabled={slotLoading}
+            className="bg-surface border border-dashed border-border rounded-xl p-5 text-center hover:border-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed w-full"
+          >
+            {slotLoading ? (
+              <p className="text-sm text-dim">処理中...</p>
+            ) : canBuySlot ? (
+              <p className="text-sm text-dim">+ 枠を追加（{nextCost.toLocaleString()} pt）</p>
+            ) : (
+              <p className="text-sm text-dim">+ 枠を追加（{nextCost.toLocaleString()} pt）<span className="text-accent ml-1">ポイント不足</span></p>
+            )}
+            {slotError && <p className="text-xs text-accent mt-1">{slotError}</p>}
+          </button>
+        </div>
       )}
 
       {/* 取引履歴 */}
