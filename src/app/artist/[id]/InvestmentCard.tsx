@@ -16,13 +16,20 @@ export default function InvestmentCard({ artistId, investments, currentIndex }: 
   const avgEntry = totalShares > 0 ? totalInvested / totalShares : 0
   const pricePerShare = Math.floor(currentIndex)
 
+  // RPCと同じ計算式: round(points_invested × current_index / index_at_entry) を投資ごとに合算
+  const totalReturnPts = investments.reduce((s, inv) =>
+    s + Math.round(inv.points_invested * (currentIndex / inv.index_at_entry)), 0)
+
   const [shares, setShares] = useState(totalShares > 0 ? totalShares : 0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
 
-  const returnPts = shares * pricePerShare
-  const totalValue = totalShares * pricePerShare
+  // 全枚売却は正確な値、部分売却は比例計算（近似）
+  const returnPts = shares === totalShares
+    ? totalReturnPts
+    : Math.round(totalReturnPts * shares / totalShares)
+  const totalValue = totalReturnPts
   const totalPnL = totalValue - totalInvested
   const pnlPct = totalInvested > 0 ? (totalValue / totalInvested - 1) * 100 : 0
   const noShares = totalShares === 0

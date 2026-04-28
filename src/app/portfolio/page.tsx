@@ -44,20 +44,26 @@ export default async function PortfolioPage() {
     totalInvested: number
   }>()
 
+  // RPCと同じ計算式で評価額を算出: round(points_invested × current_index / index_at_entry)
+  const returnMap = new Map<string, number>() // artist_id → 合計返却予定pt
+
   for (const inv of items) {
     const { id, name, current_index } = inv.artist
     const shares = Math.round(inv.points_invested / inv.index_at_entry)
+    const invReturn = Math.round(inv.points_invested * (current_index / inv.index_at_entry))
     if (!artistMap.has(id)) {
       artistMap.set(id, { id, name, currentIndex: current_index, totalShares: 0, totalInvested: 0 })
+      returnMap.set(id, 0)
     }
     const entry = artistMap.get(id)!
     entry.totalShares += shares
     entry.totalInvested += inv.points_invested
+    returnMap.set(id, (returnMap.get(id) ?? 0) + invReturn)
   }
 
   const grouped = Array.from(artistMap.values())
 
-  const totalEval = grouped.reduce((s, a) => s + a.totalShares * Math.floor(a.currentIndex), 0)
+  const totalEval = Array.from(returnMap.values()).reduce((s, v) => s + v, 0)
   const freePoints = profile?.free_points ?? 0
   const totalPoints = freePoints + totalEval
 
@@ -90,8 +96,7 @@ export default async function PortfolioPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {grouped.map((a) => {
-            const pricePerShare = Math.floor(a.currentIndex)
-            const currentValue = a.totalShares * pricePerShare
+            const currentValue = returnMap.get(a.id) ?? 0
             const avgEntry = a.totalShares > 0 ? Math.floor(a.totalInvested / a.totalShares) : 0
             const pnl = currentValue - a.totalInvested
             const pnlPct = a.totalInvested > 0 ? (currentValue / a.totalInvested - 1) * 100 : 0
