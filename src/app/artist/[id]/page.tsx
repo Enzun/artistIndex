@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import Image from 'next/image'
 import type { ViewSnapshot, Investment } from '@/lib/types'
 import InvestForm from './InvestForm'
 import InvestmentCard from './InvestmentCard'
@@ -131,24 +130,6 @@ export default async function ArtistPage({
       <div className="mt-4">
         <ArtistInfo channelId={artist.youtube_channel_id} totalViews={latestTotalViews} />
       </div>
-
-      {/* アイコン + 説明文 */}
-      {(artist.thumbnail_url || artist.description) && (
-        <div className="mt-6 flex items-start gap-4">
-          {artist.thumbnail_url && (
-            <Image
-              src={artist.thumbnail_url}
-              alt={artist.name}
-              width={56}
-              height={56}
-              className="rounded-full flex-shrink-0"
-            />
-          )}
-          {artist.description && (
-            <p className="text-sm text-dim whitespace-pre-wrap">{artist.description}</p>
-          )}
-        </div>
-      )}
     </div>
   )
 }
