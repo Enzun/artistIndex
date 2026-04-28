@@ -9,6 +9,7 @@ type Artist = {
   current_index: number
   youtube_channel_id: string
   created_at: string
+  thumbnail_url: string | null
 }
 
 type SnapshotStat = {
@@ -36,7 +37,7 @@ export default async function AdminPage() {
   ] = await Promise.all([
     supabase
       .from('artists')
-      .select('id, name, status, current_index, youtube_channel_id, created_at')
+      .select('id, name, status, current_index, youtube_channel_id, created_at, thumbnail_url')
       .order('status')
       .order('name'),
     supabase

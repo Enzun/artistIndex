@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 
 type Artist = {
   id: string
@@ -9,6 +10,7 @@ type Artist = {
   current_index: number
   youtube_channel_id: string
   created_at: string
+  thumbnail_url: string | null
 }
 
 type SnapshotStat = {
@@ -50,7 +52,6 @@ export default function AdminArtistList({
               <th className="text-right px-4 py-2.5 font-medium">指数</th>
               <th className="text-right px-4 py-2.5 font-medium">スナップショット</th>
               <th className="text-right px-4 py-2.5 font-medium">最終取得日</th>
-              <th className="text-right px-4 py-2.5 font-medium">追加日</th>
             </tr>
           </thead>
           <tbody>
@@ -60,6 +61,17 @@ export default function AdminArtistList({
                 <tr key={artist.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-surface2/50'}`}>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
+                      {artist.thumbnail_url ? (
+                        <Image
+                          src={artist.thumbnail_url}
+                          alt=""
+                          width={24}
+                          height={24}
+                          className="rounded-full flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-border flex-shrink-0" />
+                      )}
                       <a href={`/admin/artist/${artist.id}`} className="hover:underline font-medium">
                         {artist.name}
                       </a>
@@ -92,15 +104,12 @@ export default function AdminArtistList({
                   <td className="px-4 py-2.5 text-right text-dim">
                     {stat?.last_date ?? '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-dim">
-                    {artist.created_at.split('T')[0]}
-                  </td>
                 </tr>
               )
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-dim text-xs">
+                <td colSpan={5} className="px-4 py-6 text-center text-dim text-xs">
                   「{query}」に一致するアーティストはいません
                 </td>
               </tr>
