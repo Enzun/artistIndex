@@ -1,5 +1,7 @@
 'use client'
 
+'use client'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -84,7 +86,11 @@ export default function SignupPage() {
         </div>
 
         <p className="text-center text-xs text-dim mt-6 px-4">
-          登録することで利用規約およびプライバシーポリシーに同意したものとみなします。
+          登録することで
+          <Link href="/terms" className="underline hover:opacity-70 transition-opacity mx-1">利用規約</Link>
+          および
+          <Link href="/privacy" className="underline hover:opacity-70 transition-opacity mx-1">プライバシーポリシー</Link>
+          に同意したものとみなします。
         </p>
       </div>
     </div>

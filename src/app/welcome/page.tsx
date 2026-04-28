@@ -101,6 +101,10 @@ export default function WelcomePage() {
 
       {/* ── フッター ── */}
       <footer className="border-t border-border px-6 py-6 text-center">
+        <div className="flex gap-4 justify-center text-xs text-dim mb-2">
+          <Link href="/terms" className="hover:text-text transition-colors">利用規約</Link>
+          <Link href="/privacy" className="hover:text-text transition-colors">プライバシーポリシー</Link>
+        </div>
         <p className="text-xs text-dim">© 2026 Artist Index</p>
       </footer>
 
