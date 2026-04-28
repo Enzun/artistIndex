@@ -25,8 +25,8 @@ export default function WelcomePage() {
           推しの勢いを、<br />指数で買え。
         </h1>
         <p className="text-bg/60 text-sm sm:text-base max-w-sm mx-auto mb-10 leading-relaxed">
-          アーティストの再生数をもとに算出された「指数」を売買する、<br className="hidden sm:block" />
-          新感覚の音楽投資ゲーム。
+          アーティストの再生数から算出した「指数」をポイントで売買する、<br className="hidden sm:block" />
+          音楽ファンのための新しいプラットフォーム。
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
