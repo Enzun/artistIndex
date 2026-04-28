@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 function DangerSection({
   title,
@@ -11,6 +12,7 @@ function DangerSection({
   confirmText,
   confirmPlaceholder,
   onConfirm,
+  successContent,
 }: {
   title: string
   description: string
@@ -19,10 +21,12 @@ function DangerSection({
   confirmText: string
   confirmPlaceholder: string
   onConfirm: () => Promise<void>
+  successContent?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
   const [error, setError] = useState('')
 
   async function handleConfirm() {
@@ -30,10 +34,20 @@ function DangerSection({
     setError('')
     try {
       await onConfirm()
+      setDone(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '失敗しました')
+      setLoading(false)
     }
-    setLoading(false)
+    // loading は done=true になったら自然に隠れるのでリセット不要
+  }
+
+  if (done && successContent) {
+    return (
+      <div className="border border-border rounded-xl p-5">
+        {successContent}
+      </div>
+    )
   }
 
   return (
@@ -69,7 +83,8 @@ function DangerSection({
             </button>
             <button
               onClick={() => { setOpen(false); setInput('') }}
-              className="text-xs text-dim hover:text-text transition-colors px-3 py-1.5"
+              disabled={loading}
+              className="text-xs text-dim hover:text-text transition-colors px-3 py-1.5 disabled:opacity-40"
             >
               キャンセル
             </button>
@@ -87,7 +102,6 @@ export default function SettingsPage() {
     const res = await fetch('/api/account/reset', { method: 'POST' })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
-    router.push('/?reset=1')
     router.refresh()
   }
 
@@ -110,16 +124,33 @@ export default function SettingsPage() {
             title="データをリセットする"
             description="保有中のカードがすべて消え、取引履歴も削除されます。ポイントは5,000ptに戻ります。この操作は取り消せません。"
             buttonLabel="リセットする"
-            confirmLabel={`確認のため「リセット」と入力してください`}
+            confirmLabel="確認のため「リセット」と入力してください"
             confirmText="リセット"
             confirmPlaceholder="リセット"
             onConfirm={handleReset}
+            successContent={
+              <div className="text-center py-2">
+                <div className="w-10 h-10 rounded-full bg-mga/10 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-5 h-5 text-mga" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="font-semibold text-sm mb-1">リセット完了</p>
+                <p className="text-xs text-dim mb-4">ポイントが5,000ptに戻りました。</p>
+                <Link
+                  href="/"
+                  className="inline-block bg-text text-bg rounded-lg px-5 py-2 text-xs font-medium hover:opacity-90 transition-opacity"
+                >
+                  トップへ戻る
+                </Link>
+              </div>
+            }
           />
           <DangerSection
             title="アカウントを削除する"
             description="アカウントと全データが完全に削除されます。同じメールアドレスで再登録できますが、現在の取引履歴は復元できません。"
             buttonLabel="アカウントを削除する"
-            confirmLabel={`確認のため「アカウントを削除」と入力してください`}
+            confirmLabel="確認のため「アカウントを削除」と入力してください"
             confirmText="アカウントを削除"
             confirmPlaceholder="アカウントを削除"
             onConfirm={handleDelete}
