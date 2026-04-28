@@ -128,7 +128,12 @@ export default async function ArtistPage({
 
       {/* アーティスト情報 */}
       <div className="mt-4">
-        <ArtistInfo channelId={artist.youtube_channel_id} totalViews={latestTotalViews} />
+        <ArtistInfo
+          channelId={artist.youtube_channel_id}
+          totalViews={latestTotalViews}
+          thumbnailUrl={artist.thumbnail_url}
+          description={artist.description}
+        />
       </div>
     </div>
   )

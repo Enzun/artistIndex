@@ -1,23 +1,34 @@
-// アーティスト情報パネル（仮レイアウト）
-// 将来: YouTube APIからサムネイル・登録者数・概要を取得して表示
+import Image from 'next/image'
 
 type Props = {
   channelId: string
   totalViews: number
+  thumbnailUrl?: string | null
+  description?: string | null
 }
 
-export default function ArtistInfo({ channelId, totalViews }: Props) {
+export default function ArtistInfo({ channelId, totalViews, thumbnailUrl, description }: Props) {
   const youtubeUrl = `https://www.youtube.com/channel/${channelId}`
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5 mb-6">
       <div className="flex gap-4">
-        {/* サムネイルプレースホルダー */}
-        <div className="w-16 h-16 rounded-full bg-surface2 border border-border flex-shrink-0 flex items-center justify-center">
-          <svg className="w-6 h-6 text-dim" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-          </svg>
-        </div>
+        {/* サムネイル */}
+        {thumbnailUrl ? (
+          <Image
+            src={thumbnailUrl}
+            alt=""
+            width={64}
+            height={64}
+            className="rounded-full flex-shrink-0"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-surface2 border border-border flex-shrink-0 flex items-center justify-center">
+            <svg className="w-6 h-6 text-dim" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+            </svg>
+          </div>
+        )}
 
         {/* 情報 */}
         <div className="flex-1 min-w-0">
@@ -25,9 +36,11 @@ export default function ArtistInfo({ channelId, totalViews }: Props) {
             <span>登録者数: ——</span>
             <span>総再生数: {totalViews.toLocaleString()}</span>
           </div>
-          <p className="text-xs text-dim line-clamp-2">
-            概要文はここに表示されます（準備中）
-          </p>
+          {description ? (
+            <p className="text-xs text-dim whitespace-pre-wrap line-clamp-3">{description}</p>
+          ) : (
+            <p className="text-xs text-dim">——</p>
+          )}
           <a
             href={youtubeUrl}
             target="_blank"
