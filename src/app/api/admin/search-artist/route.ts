@@ -66,6 +66,28 @@ async function mbUrls(mbid: string): Promise<MBUrls> {
   return result
 }
 
+async function searchWikipedia(name: string): Promise<string | null> {
+  try {
+    const url = new URL('https://ja.wikipedia.org/w/api.php')
+    url.searchParams.set('action', 'query')
+    url.searchParams.set('list', 'search')
+    url.searchParams.set('srsearch', name)
+    url.searchParams.set('srnamespace', '0')
+    url.searchParams.set('srlimit', '1')
+    url.searchParams.set('format', 'json')
+    url.searchParams.set('origin', '*')
+    const res = await fetch(url.toString(), {
+      headers: { 'User-Agent': MB_UA },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { query: { search: Array<{ title: string }> } }
+    return data.query.search[0]?.title ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies()
   const session = cookieStore.get('admin_session')?.value
@@ -76,14 +98,21 @@ export async function GET(request: NextRequest) {
   const name = request.nextUrl.searchParams.get('name')?.trim()
   if (!name) return NextResponse.json({ error: '名前が必要です' }, { status: 400 })
 
-  const mbid = await mbSearch(name)
-  if (!mbid) return NextResponse.json({ spotify: null, wikipedia: null, youtube: null })
+  // MusicBrainz（Spotify ID メイン）と Wikipedia 検索を並列実行
+  const [mbid, wpTitle] = await Promise.all([
+    mbSearch(name),
+    searchWikipedia(name),
+  ])
 
-  const urls = await mbUrls(mbid)
+  // MusicBrainz url-rels（MBID が取れた場合のみ）
+  const urls = mbid ? await mbUrls(mbid) : { spotify_id: null, wikipedia_ja: null, youtube_channel_id: null }
+
+  // Wikipedia: MusicBrainz にあればそちらを優先（編集者が確認済みのリンク）、なければ検索結果
+  const wikipediaTitle = urls.wikipedia_ja ?? wpTitle
 
   return NextResponse.json({
-    spotify:   urls.spotify_id    ? { id: urls.spotify_id }                    : null,
-    wikipedia: urls.wikipedia_ja  ? { title: urls.wikipedia_ja }               : null,
-    youtube:   urls.youtube_channel_id ? { id: urls.youtube_channel_id }       : null,
+    spotify:   urls.spotify_id         ? { id: urls.spotify_id }      : null,
+    wikipedia: wikipediaTitle          ? { title: wikipediaTitle }     : null,
+    youtube:   urls.youtube_channel_id ? { id: urls.youtube_channel_id } : null,
   })
 }
