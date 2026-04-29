@@ -21,16 +21,13 @@ export default function AddArtistForm() {
     try {
       const res = await fetch(`/api/admin/search-artist?name=${encodeURIComponent(name.trim())}`)
       const data = await res.json() as {
-        spotify: { id: string; name: string; followers: number } | null
+        spotify:   { id: string } | null
         wikipedia: { title: string } | null
+        youtube:   { id: string } | null
       }
-      if (data.spotify) {
-        setSpotifyId(data.spotify.id)
-        setSpotifyName(data.spotify.name)
-      }
-      if (data.wikipedia) {
-        setWikipediaJa(data.wikipedia.title)
-      }
+          if (data.spotify)   { setSpotifyId(data.spotify.id); setSpotifyName('MusicBrainz') }
+      if (data.wikipedia) { setWikipediaJa(data.wikipedia.title) }
+      if (data.youtube && !channelInput.trim()) { setChannelInput(data.youtube.id) }
     } catch { /* ignore */ }
     setSearching(false)
   }

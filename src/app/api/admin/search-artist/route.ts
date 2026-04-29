@@ -1,6 +1,6 @@
 /**
  * GET /api/admin/search-artist?name=xxx
- * アーティスト名から Spotify ID と Wikipedia 記事名を検索する。
+ * MusicBrainz経由でアーティスト名から Spotify ID・Wikipedia記事名・YouTubeチャンネルIDを検索する。
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -8,67 +8,62 @@ import { cookies } from 'next/headers'
 
 export const maxDuration = 30
 
-async function searchSpotify(name: string): Promise<{ id: string; name: string; followers: number } | null> {
-  try {
-    const creds = Buffer.from(
-      `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
-    ).toString('base64')
-    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${creds}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=client_credentials',
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!tokenRes.ok) return null
-    const { access_token } = await tokenRes.json() as { access_token: string }
+const MB_UA = 'artistIndex/1.0 (https://artist-index.vercel.app)'
 
-    const url = new URL('https://api.spotify.com/v1/search')
-    url.searchParams.set('q', name)
-    url.searchParams.set('type', 'artist')
-    url.searchParams.set('limit', '1')
-    url.searchParams.set('market', 'JP')
-    const searchRes = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${access_token}` },
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!searchRes.ok) return null
-    const data = await searchRes.json() as {
-      artists: { items: Array<{ id: string; name: string; followers: { total: number } }> }
-    }
-    const item = data.artists.items[0]
-    if (!item) return null
-    return { id: item.id, name: item.name, followers: item.followers.total }
-  } catch {
-    return null
-  }
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[\s\u3000\-_・]/g, '')
 }
 
-async function searchWikipedia(name: string): Promise<{ title: string } | null> {
-  try {
-    const url = new URL('https://ja.wikipedia.org/w/api.php')
-    url.searchParams.set('action', 'query')
-    url.searchParams.set('list', 'search')
-    url.searchParams.set('srsearch', name)
-    url.searchParams.set('srnamespace', '0')
-    url.searchParams.set('srlimit', '1')
-    url.searchParams.set('format', 'json')
-    url.searchParams.set('origin', '*')
-    const res = await fetch(url.toString(), {
-      headers: { 'User-Agent': 'artistIndex-admin/1.0' },
-    })
-    if (!res.ok) return null
-    const data = await res.json() as {
-      query: { search: Array<{ title: string }> }
+async function mbSearch(name: string): Promise<string | null> {
+  const url = new URL('https://musicbrainz.org/ws/2/artist/')
+  url.searchParams.set('query', `artist:"${name}"`)
+  url.searchParams.set('fmt', 'json')
+  url.searchParams.set('limit', '5')
+  const res = await fetch(url.toString(), {
+    headers: { 'User-Agent': MB_UA },
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!res.ok) return null
+  const data = await res.json() as { artists: Array<{ id: string; name: string }> }
+  const artists = data.artists ?? []
+  if (!artists.length) return null
+  const exact = artists.find(a => normalize(a.name) === normalize(name))
+  return (exact ?? artists[0]).id
+}
+
+type MBUrls = {
+  spotify_id: string | null
+  wikipedia_ja: string | null
+  youtube_channel_id: string | null
+}
+
+async function mbUrls(mbid: string): Promise<MBUrls> {
+  const res = await fetch(
+    `https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels&fmt=json`,
+    {
+      headers: { 'User-Agent': MB_UA },
+      signal: AbortSignal.timeout(8000),
     }
-    const item = data.query.search[0]
-    if (!item) return null
-    return { title: item.title }
-  } catch {
-    return null
+  )
+  const result: MBUrls = { spotify_id: null, wikipedia_ja: null, youtube_channel_id: null }
+  if (!res.ok) return result
+  const data = await res.json() as { relations: Array<{ url: { resource: string } }> }
+  for (const rel of (data.relations ?? [])) {
+    const href = rel.url?.resource ?? ''
+    if (!result.spotify_id && href.startsWith('https://open.spotify.com/artist/')) {
+      result.spotify_id = href.split('/').at(-1) ?? null
+    } else if (!result.wikipedia_ja && href.startsWith('https://ja.wikipedia.org/wiki/')) {
+      result.wikipedia_ja = decodeURIComponent(
+        href.replace('https://ja.wikipedia.org/wiki/', '')
+      ).replace(/_/g, ' ')
+    } else if (!result.youtube_channel_id && href.includes('youtube.com/channel/')) {
+      result.youtube_channel_id = href.split('/channel/')[1]?.split('/')[0] ?? null
+    }
   }
+  return result
 }
 
 export async function GET(request: NextRequest) {
@@ -79,14 +74,16 @@ export async function GET(request: NextRequest) {
   }
 
   const name = request.nextUrl.searchParams.get('name')?.trim()
-  if (!name) {
-    return NextResponse.json({ error: '名前が必要です' }, { status: 400 })
-  }
+  if (!name) return NextResponse.json({ error: '名前が必要です' }, { status: 400 })
 
-  const [spotify, wikipedia] = await Promise.all([
-    searchSpotify(name),
-    searchWikipedia(name),
-  ])
+  const mbid = await mbSearch(name)
+  if (!mbid) return NextResponse.json({ spotify: null, wikipedia: null, youtube: null })
 
-  return NextResponse.json({ spotify, wikipedia })
+  const urls = await mbUrls(mbid)
+
+  return NextResponse.json({
+    spotify:   urls.spotify_id    ? { id: urls.spotify_id }                    : null,
+    wikipedia: urls.wikipedia_ja  ? { title: urls.wikipedia_ja }               : null,
+    youtube:   urls.youtube_channel_id ? { id: urls.youtube_channel_id }       : null,
+  })
 }
