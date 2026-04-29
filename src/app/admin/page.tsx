@@ -8,6 +8,8 @@ type Artist = {
   status: string
   current_index: number
   youtube_channel_id: string
+  spotify_artist_id: string | null
+  wikipedia_ja: string | null
   created_at: string
   thumbnail_url: string | null
 }
@@ -37,7 +39,7 @@ export default async function AdminPage() {
   ] = await Promise.all([
     supabase
       .from('artists')
-      .select('id, name, status, current_index, youtube_channel_id, created_at, thumbnail_url')
+      .select('id, name, status, current_index, youtube_channel_id, spotify_artist_id, wikipedia_ja, created_at, thumbnail_url')
       .order('status')
       .order('name'),
     supabase

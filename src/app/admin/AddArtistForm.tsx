@@ -7,10 +7,33 @@ export default function AddArtistForm() {
   const [name, setName] = useState('')
   const [channelInput, setChannelInput] = useState('')
   const [spotifyId, setSpotifyId] = useState('')
+  const [spotifyName, setSpotifyName] = useState<string | null>(null)
   const [wikipediaJa, setWikipediaJa] = useState('')
+  const [searching, setSearching] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ ok: true; artistName: string; channelTitle: string } | { ok: false; error: string } | null>(null)
   const router = useRouter()
+
+  async function handleSearch() {
+    if (!name.trim()) return
+    setSearching(true)
+    setSpotifyName(null)
+    try {
+      const res = await fetch(`/api/admin/search-artist?name=${encodeURIComponent(name.trim())}`)
+      const data = await res.json() as {
+        spotify: { id: string; name: string; followers: number } | null
+        wikipedia: { title: string } | null
+      }
+      if (data.spotify) {
+        setSpotifyId(data.spotify.id)
+        setSpotifyName(data.spotify.name)
+      }
+      if (data.wikipedia) {
+        setWikipediaJa(data.wikipedia.title)
+      }
+    } catch { /* ignore */ }
+    setSearching(false)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -20,7 +43,12 @@ export default function AddArtistForm() {
     const res = await fetch('/api/admin/artist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, channelInput, spotifyId: spotifyId.trim() || null, wikipediaJa: wikipediaJa.trim() || null }),
+      body: JSON.stringify({
+        name,
+        channelInput,
+        spotifyId: spotifyId.trim() || null,
+        wikipediaJa: wikipediaJa.trim() || null,
+      }),
     })
     const data = await res.json()
 
@@ -29,6 +57,7 @@ export default function AddArtistForm() {
       setName('')
       setChannelInput('')
       setSpotifyId('')
+      setSpotifyName(null)
       setWikipediaJa('')
       router.refresh()
     } else {
@@ -41,17 +70,28 @@ export default function AddArtistForm() {
     <div className="bg-surface border border-border rounded-xl p-5 mb-8">
       <h2 className="text-sm font-semibold mb-4">アーティストを追加</h2>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        {/* 名前 + Channel ID */}
         <div className="flex gap-3">
           <div className="flex-1">
             <label className="text-xs text-dim block mb-1">アーティスト名</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Mrs. GREEN APPLE"
-              required
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={name}
+                onChange={e => { setName(e.target.value); setSpotifyName(null) }}
+                placeholder="Mrs. GREEN APPLE"
+                required
+                className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white"
+              />
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={searching || !name.trim()}
+                className="border border-border rounded-lg px-3 py-2 text-xs text-dim hover:text-text hover:border-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {searching ? '検索中...' : '自動検索'}
+              </button>
+            </div>
           </div>
           <div className="flex-1">
             <label className="text-xs text-dim block mb-1">Channel ID または @ハンドル</label>
@@ -66,13 +106,17 @@ export default function AddArtistForm() {
           </div>
         </div>
 
+        {/* Spotify + Wikipedia */}
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="text-xs text-dim block mb-1">Spotify Artist ID（任意）</label>
+            <label className="text-xs text-dim block mb-1">
+              Spotify Artist ID（任意）
+              {spotifyName && <span className="ml-2 text-mga">→ {spotifyName}</span>}
+            </label>
             <input
               type="text"
               value={spotifyId}
-              onChange={e => setSpotifyId(e.target.value)}
+              onChange={e => { setSpotifyId(e.target.value); setSpotifyName(null) }}
               placeholder="open.spotify.com/artist/ここのID"
               className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white font-mono"
             />

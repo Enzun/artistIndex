@@ -9,6 +9,8 @@ type Artist = {
   status: string
   current_index: number
   youtube_channel_id: string
+  spotify_artist_id: string | null
+  wikipedia_ja: string | null
   created_at: string
   thumbnail_url: string | null
 }
@@ -48,19 +50,26 @@ export default function AdminArtistList({
           <thead>
             <tr className="border-b border-border text-xs text-dim">
               <th className="text-left px-4 py-2.5 font-medium">名前</th>
-              <th className="text-left px-4 py-2.5 font-medium">status</th>
+              <th className="text-left px-4 py-2.5 font-medium">Spotify</th>
+              <th className="text-left px-4 py-2.5 font-medium">Wikipedia</th>
               <th className="text-right px-4 py-2.5 font-medium">指数</th>
-              <th className="text-right px-4 py-2.5 font-medium">スナップショット</th>
-              <th className="text-right px-4 py-2.5 font-medium">最終取得日</th>
+              <th className="text-right px-4 py-2.5 font-medium">スナップ</th>
+              <th className="text-right px-4 py-2.5 font-medium">最終取得</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((artist, i) => {
               const stat = statsMap[artist.id]
+              const isActive = artist.status === 'active'
               return (
                 <tr key={artist.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-surface2/50'}`}>
+                  {/* 名前列: ステータス点 + サムネイル + 名前 + YT */}
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
+                      <span
+                        className={`w-2 h-2 rounded-full flex-shrink-0 ${isActive ? 'bg-mga' : 'bg-border'}`}
+                        title={artist.status}
+                      />
                       {artist.thumbnail_url ? (
                         <Image
                           src={artist.thumbnail_url}
@@ -80,7 +89,7 @@ export default function AdminArtistList({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-dim hover:text-accent transition-colors flex-shrink-0"
-                        title="YouTubeチャンネルを開く"
+                        title={artist.youtube_channel_id}
                       >
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
@@ -88,20 +97,48 @@ export default function AdminArtistList({
                       </a>
                     </div>
                   </td>
+
+                  {/* Spotify列 */}
                   <td className="px-4 py-2.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      artist.status === 'active' ? 'bg-mga/10 text-mga' : 'bg-surface2 text-dim'
-                    }`}>
-                      {artist.status}
-                    </span>
+                    {artist.spotify_artist_id ? (
+                      <a
+                        href={`https://open.spotify.com/artist/${artist.spotify_artist_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-mono text-dim hover:text-mga transition-colors"
+                        title="Spotifyで開く"
+                      >
+                        {artist.spotify_artist_id}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-border">—</span>
+                    )}
                   </td>
+
+                  {/* Wikipedia列 */}
+                  <td className="px-4 py-2.5">
+                    {artist.wikipedia_ja ? (
+                      <a
+                        href={`https://ja.wikipedia.org/wiki/${encodeURIComponent(artist.wikipedia_ja.replace(/ /g, '_'))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-dim hover:text-text transition-colors"
+                        title="Wikipediaで開く"
+                      >
+                        {artist.wikipedia_ja}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-border">—</span>
+                    )}
+                  </td>
+
                   <td className="px-4 py-2.5 text-right tabular-nums">
-                    {artist.status === 'active' ? Math.floor(artist.current_index).toLocaleString() : '—'}
+                    {isActive ? Math.floor(artist.current_index).toLocaleString() : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-dim">
                     {stat ? stat.count.toLocaleString() : 0}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-dim">
+                  <td className="px-4 py-2.5 text-right text-dim text-xs">
                     {stat?.last_date ?? '—'}
                   </td>
                 </tr>
@@ -109,7 +146,7 @@ export default function AdminArtistList({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-dim text-xs">
+                <td colSpan={6} className="px-4 py-6 text-center text-dim text-xs">
                   「{query}」に一致するアーティストはいません
                 </td>
               </tr>
