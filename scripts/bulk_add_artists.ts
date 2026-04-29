@@ -18,7 +18,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-type ArtistEntry = { name: string; channel_id: string }
+type ArtistEntry = { name: string; channel_id: string; spotify_id?: string; wikipedia_ja?: string }
 
 type ChannelInfo = {
   resolvedId: string
