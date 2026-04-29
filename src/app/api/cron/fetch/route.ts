@@ -1,10 +1,8 @@
 /**
  * GET /api/cron/fetch
- * 全アーティストの YouTube 総再生数を取得して view_snapshots に upsert する。
- * YouTube API を 50 件ずつバッチ処理するため、1000 アーティストでも 20 リクエストで済む。
- *
- * 将来的に hourly / per-minute 化する場合はこのエンドポイントの schedule だけ変更する。
- * （calc は引き続き daily で OK）
+ * YouTube 総再生数 + Spotify popularity/followers を取得して view_snapshots に upsert する。
+ * YouTube: channels.list を 50 件バッチ
+ * Spotify: /v1/artists を 50 件バッチ（spotify_artist_id がある場合のみ）
  */
 
 import { NextResponse } from 'next/server'
@@ -12,16 +10,18 @@ import { verifyCronAuth, getServiceClient } from '../_lib/auth'
 import { CronLogger } from '../_lib/logger'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60  // Hobby プラン上限
+export const maxDuration = 60
 
-const BATCH_SIZE = 50  // YouTube channels.list の上限
+const BATCH_SIZE = 50
+
+// ─── YouTube ────────────────────────────────────────────────────────────────
 
 type YTItem = {
   id: string
   statistics: { viewCount: string }
 }
 
-async function fetchBatch(channelIds: string[]): Promise<YTItem[]> {
+async function fetchYoutubeBatch(channelIds: string[]): Promise<YTItem[]> {
   const url = new URL('https://www.googleapis.com/youtube/v3/channels')
   url.searchParams.set('part', 'statistics')
   url.searchParams.set('id', channelIds.join(','))
@@ -32,6 +32,70 @@ async function fetchBatch(channelIds: string[]): Promise<YTItem[]> {
   return data.items ?? []
 }
 
+// ─── Spotify ─────────────────────────────────────────────────────────────────
+
+type SpotifyArtist = {
+  id: string
+  popularity: number
+  followers: { total: number }
+}
+
+async function getSpotifyToken(): Promise<string> {
+  const creds = Buffer.from(
+    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+  ).toString('base64')
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${creds}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
+  })
+  if (!res.ok) throw new Error(`Spotify auth error: ${res.status}`)
+  const data = await res.json() as { access_token: string }
+  return data.access_token
+}
+
+async function fetchSpotifyBatch(ids: string[], token: string): Promise<SpotifyArtist[]> {
+  const url = new URL('https://api.spotify.com/v1/artists')
+  url.searchParams.set('ids', ids.join(','))
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`Spotify API error: ${res.status}`)
+  const data = await res.json() as { artists: SpotifyArtist[] }
+  return (data.artists ?? []).filter(Boolean)
+}
+
+// ─── Wikipedia ───────────────────────────────────────────────────────────────
+
+async function fetchWikipediaViews(title: string, date: string): Promise<number | null> {
+  const encoded = encodeURIComponent(title.replace(/ /g, '_'))
+  const d = date.replace(/-/g, '')
+  const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/ja.wikipedia.org/all-access/all-agents/${encoded}/daily/${d}/${d}`
+  const res = await fetch(url, { headers: { 'User-Agent': 'artistIndex-cron/1.0' } })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Wikipedia API error: ${res.status} for ${title}`)
+  const data = await res.json() as { items?: { views: number }[] }
+  return data.items?.[0]?.views ?? null
+}
+
+async function fetchWikipediaBatch(titles: string[], date: string): Promise<Map<string, number>> {
+  const result = new Map<string, number>()
+  const CONCURRENCY = 20
+  for (let i = 0; i < titles.length; i += CONCURRENCY) {
+    const chunk = titles.slice(i, i + CONCURRENCY)
+    const settled = await Promise.allSettled(chunk.map(t => fetchWikipediaViews(t, date)))
+    settled.forEach((r, j) => {
+      if (r.status === 'fulfilled' && r.value !== null) result.set(chunk[j], r.value)
+    })
+  }
+  return result
+}
+
+// ─── Handler ─────────────────────────────────────────────────────────────────
+
 export async function GET(request: Request) {
   if (!verifyCronAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -41,21 +105,18 @@ export async function GET(request: Request) {
   const logger = new CronLogger('fetch', sb)
   await logger.start()
 
-  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0] // JST
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
   const summary: Record<string, unknown> = { date: today, ok: 0, error: 0, errors: [] as string[] }
 
   try {
     const { data: artists, error } = await sb
       .from('artists')
-      .select('id, name, youtube_channel_id')
+      .select('id, name, youtube_channel_id, spotify_artist_id, wikipedia_ja')
     if (error) throw error
 
     const list = artists ?? []
 
-    // チャンネルID → アーティスト情報のマップ
-    const artistMap = new Map(list.map(a => [a.youtube_channel_id, a]))
-
-    // 全アーティストの前日以前の最新スナップショットを一括取得
+    // ── 前日以前の最新 YouTube スナップショットを一括取得 ──
     const artistIds = list.map(a => a.id)
     const { data: prevSnaps } = await sb
       .from('view_snapshots')
@@ -64,7 +125,6 @@ export async function GET(request: Request) {
       .lt('snapshot_date', today)
       .order('snapshot_date', { ascending: false })
 
-    // アーティストIDごとに最新1件だけ残す
     const prevMap = new Map<string, number>()
     for (const snap of (prevSnaps ?? [])) {
       if (!prevMap.has(snap.artist_id)) {
@@ -72,38 +132,109 @@ export async function GET(request: Request) {
       }
     }
 
-    // 50 件ずつバッチ処理
-    const chunks: string[][] = []
+    // ── YouTube バッチ取得 ──
+    const ytMap = new Map<string, number>()  // channelId → totalViews
+    const ytArtistMap = new Map(list.map(a => [a.youtube_channel_id, a]))
+    const ytChunks: string[][] = []
     for (let i = 0; i < list.length; i += BATCH_SIZE) {
-      chunks.push(list.slice(i, i + BATCH_SIZE).map(a => a.youtube_channel_id))
+      ytChunks.push(list.slice(i, i + BATCH_SIZE).map(a => a.youtube_channel_id))
     }
-
-    // upsert データをまとめて一括投入
-    const upsertRows: { artist_id: string; total_views: number; daily_increase: number; snapshot_date: string }[] = []
-
-    for (const chunk of chunks) {
-      let items: YTItem[]
+    for (const chunk of ytChunks) {
       try {
-        items = await fetchBatch(chunk)
+        const items = await fetchYoutubeBatch(chunk)
+        for (const item of items) {
+          ytMap.set(item.id, parseInt(item.statistics.viewCount, 10))
+        }
       } catch (err) {
-        ;(summary.errors as string[]).push(`batch error: ${err}`)
+        ;(summary.errors as string[]).push(`YouTube batch error: ${err}`)
         summary.error = (summary.error as number) + chunk.length
-        continue
-      }
-
-      for (const item of items) {
-        const artist = artistMap.get(item.id)
-        if (!artist) continue
-
-        const totalViews = parseInt(item.statistics.viewCount, 10)
-        const prevViews = prevMap.get(artist.id)
-        const dailyIncrease = prevViews !== undefined ? Math.max(totalViews - prevViews, 0) : 0
-
-        upsertRows.push({ artist_id: artist.id, total_views: totalViews, daily_increase: dailyIncrease, snapshot_date: today })
       }
     }
 
-    // 一括 upsert (view_snapshots)
+    // ── Spotify バッチ取得 ──
+    const spotifyMap = new Map<string, { popularity: number; followers: number }>()
+    const spotifyList = list.filter(a => a.spotify_artist_id)
+    if (spotifyList.length > 0) {
+      try {
+        const token = await getSpotifyToken()
+        const spChunks: string[][] = []
+        for (let i = 0; i < spotifyList.length; i += BATCH_SIZE) {
+          spChunks.push(spotifyList.slice(i, i + BATCH_SIZE).map(a => a.spotify_artist_id!))
+        }
+        for (const chunk of spChunks) {
+          try {
+            const items = await fetchSpotifyBatch(chunk, token)
+            for (const item of items) {
+              spotifyMap.set(item.id, { popularity: item.popularity, followers: item.followers.total })
+            }
+          } catch (err) {
+            ;(summary.errors as string[]).push(`Spotify batch error: ${err}`)
+          }
+        }
+      } catch (err) {
+        ;(summary.errors as string[]).push(`Spotify auth error: ${err}`)
+      }
+    }
+
+    // ── Wikipedia バッチ取得 ──
+    const wikipediaMap = new Map<string, number>()
+    const wikiList = list.filter(a => a.wikipedia_ja)
+    if (wikiList.length > 0) {
+      try {
+        const titles = wikiList.map(a => a.wikipedia_ja!)
+        const fetched = await fetchWikipediaBatch(titles, today)
+        for (const [title, views] of fetched) {
+          wikipediaMap.set(title, views)
+        }
+        ;(summary as Record<string, unknown>).wikipedia_ok = fetched.size
+      } catch (err) {
+        ;(summary.errors as string[]).push(`Wikipedia batch error: ${err}`)
+      }
+    }
+
+    // ── upsert 行を組み立て ──
+    type UpsertRow = {
+      artist_id: string
+      total_views: number
+      daily_increase: number
+      snapshot_date: string
+      spotify_popularity?: number
+      spotify_followers?: number
+      wikipedia_pageviews?: number
+    }
+    const upsertRows: UpsertRow[] = []
+
+    for (const artist of list) {
+      const totalViews = ytMap.get(artist.youtube_channel_id)
+      if (totalViews === undefined) continue  // YouTube 取得失敗はスキップ
+
+      const prevViews = prevMap.get(artist.id)
+      const dailyIncrease = prevViews !== undefined ? Math.max(totalViews - prevViews, 0) : 0
+
+      const row: UpsertRow = {
+        artist_id:      artist.id,
+        total_views:    totalViews,
+        daily_increase: dailyIncrease,
+        snapshot_date:  today,
+      }
+
+      if (artist.spotify_artist_id) {
+        const sp = spotifyMap.get(artist.spotify_artist_id)
+        if (sp) {
+          row.spotify_popularity = sp.popularity
+          row.spotify_followers  = sp.followers
+        }
+      }
+
+      if (artist.wikipedia_ja) {
+        const wp = wikipediaMap.get(artist.wikipedia_ja)
+        if (wp !== undefined) row.wikipedia_pageviews = wp
+      }
+
+      upsertRows.push(row)
+    }
+
+    // ── 一括 upsert ──
     if (upsertRows.length > 0) {
       const { error: upsertErr } = await sb
         .from('view_snapshots')

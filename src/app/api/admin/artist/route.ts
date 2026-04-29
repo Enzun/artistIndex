@@ -33,6 +33,33 @@ async function resolveChannel(channelInput: string) {
   }
 }
 
+async function resolveSpotify(spotifyId: string): Promise<{ popularity: number; followers: number } | null> {
+  try {
+    const creds = Buffer.from(
+      `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+    ).toString('base64')
+    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${creds}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+    })
+    if (!tokenRes.ok) return null
+    const { access_token } = await tokenRes.json() as { access_token: string }
+
+    const artistRes = await fetch(`https://api.spotify.com/v1/artists/${spotifyId}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    })
+    if (!artistRes.ok) return null
+    const artist = await artistRes.json() as { popularity: number; followers: { total: number } }
+    return { popularity: artist.popularity, followers: artist.followers.total }
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
   const session = cookieStore.get('admin_session')?.value
@@ -40,7 +67,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
   }
 
-  const { name, channelInput } = await request.json() as { name?: string; channelInput?: string }
+  const { name, channelInput, spotifyId } = await request.json() as {
+    name?: string
+    channelInput?: string
+    spotifyId?: string | null
+  }
   if (!name?.trim() || !channelInput?.trim()) {
     return NextResponse.json({ error: 'アーティスト名とチャンネルIDは必須です' }, { status: 400 })
   }
@@ -54,7 +85,6 @@ export async function POST(request: NextRequest) {
 
   const sb = createAdminClient()
 
-  // 重複チェック
   const { data: existing } = await sb
     .from('artists')
     .select('id, name')
@@ -68,6 +98,10 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Spotify データを取得（ID がある場合）
+  const cleanSpotifyId = spotifyId?.trim() || null
+  const spotifyData = cleanSpotifyId ? await resolveSpotify(cleanSpotifyId) : null
+
   const jstNow = Date.now() + 9 * 60 * 60 * 1000
   const today = new Date(jstNow).toISOString().split('T')[0]
 
@@ -76,6 +110,7 @@ export async function POST(request: NextRequest) {
     .insert({
       name:               name.trim(),
       youtube_channel_id: channelInfo.channelId,
+      spotify_artist_id:  cleanSpotifyId,
       current_index:      0,
       initial_index:      0,
       status:             'collecting',
@@ -90,15 +125,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
 
-  const { error: snapErr } = await sb
-    .from('view_snapshots')
-    .insert({
-      artist_id:      artist.id,
-      total_views:    channelInfo.totalViews,
-      daily_increase: 0,
-      index_value:    null,
-      snapshot_date:  today,
-    })
+  const snapRow: Record<string, unknown> = {
+    artist_id:      artist.id,
+    total_views:    channelInfo.totalViews,
+    daily_increase: 0,
+    index_value:    null,
+    snapshot_date:  today,
+  }
+  if (spotifyData) {
+    snapRow.spotify_popularity = spotifyData.popularity
+    snapRow.spotify_followers  = spotifyData.followers
+  }
+
+  const { error: snapErr } = await sb.from('view_snapshots').insert(snapRow)
 
   if (snapErr) {
     return NextResponse.json({ error: snapErr.message }, { status: 500 })

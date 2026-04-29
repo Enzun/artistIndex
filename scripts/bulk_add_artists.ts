@@ -74,7 +74,7 @@ async function main() {
   const { data: existing } = await supabase.from('artists').select('youtube_channel_id')
   const existingIds = new Set((existing ?? []).map(a => a.youtube_channel_id))
 
-  const MIN_SUBSCRIBERS = 200_000
+  const MIN_SUBSCRIBERS = 100_000
 
   type SkipEntry = { name: string; channel_id: string; reason: string; detail?: string }
   const skipped: SkipEntry[] = []
@@ -120,6 +120,8 @@ async function main() {
       initial_index:      0,
       status:             'collecting',
       published_at:       null,
+      spotify_artist_id:  entry.spotify_id || null,
+      wikipedia_ja:       entry.wikipedia_ja || null,
     })
 
     if (error) {

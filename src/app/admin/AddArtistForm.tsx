@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 export default function AddArtistForm() {
   const [name, setName] = useState('')
   const [channelInput, setChannelInput] = useState('')
+  const [spotifyId, setSpotifyId] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ ok: true; artistName: string; channelTitle: string } | { ok: false; error: string } | null>(null)
   const router = useRouter()
@@ -18,7 +19,7 @@ export default function AddArtistForm() {
     const res = await fetch('/api/admin/artist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, channelInput }),
+      body: JSON.stringify({ name, channelInput, spotifyId: spotifyId.trim() || null }),
     })
     const data = await res.json()
 
@@ -26,6 +27,7 @@ export default function AddArtistForm() {
       setResult({ ok: true, artistName: data.artist.name, channelTitle: data.artist.channelTitle })
       setName('')
       setChannelInput('')
+      setSpotifyId('')
       router.refresh()
     } else {
       setResult({ ok: false, error: data.error ?? '追加に失敗しました' })
@@ -60,6 +62,17 @@ export default function AddArtistForm() {
               className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white font-mono"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-dim block mb-1">Spotify Artist ID（任意）</label>
+          <input
+            type="text"
+            value={spotifyId}
+            onChange={e => setSpotifyId(e.target.value)}
+            placeholder="open.spotify.com/artist/ここのID"
+            className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white font-mono"
+          />
         </div>
 
         <div className="flex items-center gap-3">

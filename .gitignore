@@ -15,6 +15,10 @@ next-env.d.ts
 output.txt
 .DS_Store
 socialblade_debug.html
+spec.md
 
 # monthly data (手動入力データ、公開不要)
 data/
+
+# ローカル専用ツール（デプロイ不要）
+tools/
