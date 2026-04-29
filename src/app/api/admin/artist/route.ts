@@ -67,10 +67,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
   }
 
-  const { name, channelInput, spotifyId } = await request.json() as {
+  const { name, channelInput, spotifyId, wikipediaJa } = await request.json() as {
     name?: string
     channelInput?: string
     spotifyId?: string | null
+    wikipediaJa?: string | null
   }
   if (!name?.trim() || !channelInput?.trim()) {
     return NextResponse.json({ error: 'アーティスト名とチャンネルIDは必須です' }, { status: 400 })
@@ -102,6 +103,9 @@ export async function POST(request: NextRequest) {
   const cleanSpotifyId = spotifyId?.trim() || null
   const spotifyData = cleanSpotifyId ? await resolveSpotify(cleanSpotifyId) : null
 
+  // Wikipedia 記事名
+  const cleanWikipediaJa = wikipediaJa?.trim() || null
+
   const jstNow = Date.now() + 9 * 60 * 60 * 1000
   const today = new Date(jstNow).toISOString().split('T')[0]
 
@@ -111,6 +115,7 @@ export async function POST(request: NextRequest) {
       name:               name.trim(),
       youtube_channel_id: channelInfo.channelId,
       spotify_artist_id:  cleanSpotifyId,
+      wikipedia_ja:       cleanWikipediaJa,
       current_index:      0,
       initial_index:      0,
       status:             'collecting',
@@ -125,6 +130,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
 
+  // Wikipedia 初日ページビューを取得（記事名がある場合）
+  let wikipediaViews: number | null = null
+  if (cleanWikipediaJa) {
+    try {
+      const encoded = encodeURIComponent(cleanWikipediaJa.replace(/ /g, '_'))
+      const d = today.replace(/-/g, '')
+      const wpUrl = `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/ja.wikipedia.org/all-access/all-agents/${encoded}/daily/${d}/${d}`
+      const wpRes = await fetch(wpUrl, { headers: { 'User-Agent': 'artistIndex-admin/1.0' } })
+      if (wpRes.ok) {
+        const wpData = await wpRes.json() as { items?: { views: number }[] }
+        wikipediaViews = wpData.items?.[0]?.views ?? null
+      }
+    } catch { /* 取得失敗は無視 */ }
+  }
+
   const snapRow: Record<string, unknown> = {
     artist_id:      artist.id,
     total_views:    channelInfo.totalViews,
@@ -135,6 +155,9 @@ export async function POST(request: NextRequest) {
   if (spotifyData) {
     snapRow.spotify_popularity = spotifyData.popularity
     snapRow.spotify_followers  = spotifyData.followers
+  }
+  if (wikipediaViews !== null) {
+    snapRow.wikipedia_pageviews = wikipediaViews
   }
 
   const { error: snapErr } = await sb.from('view_snapshots').insert(snapRow)

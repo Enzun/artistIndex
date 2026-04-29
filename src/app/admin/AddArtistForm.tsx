@@ -7,6 +7,7 @@ export default function AddArtistForm() {
   const [name, setName] = useState('')
   const [channelInput, setChannelInput] = useState('')
   const [spotifyId, setSpotifyId] = useState('')
+  const [wikipediaJa, setWikipediaJa] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ ok: true; artistName: string; channelTitle: string } | { ok: false; error: string } | null>(null)
   const router = useRouter()
@@ -19,7 +20,7 @@ export default function AddArtistForm() {
     const res = await fetch('/api/admin/artist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, channelInput, spotifyId: spotifyId.trim() || null }),
+      body: JSON.stringify({ name, channelInput, spotifyId: spotifyId.trim() || null, wikipediaJa: wikipediaJa.trim() || null }),
     })
     const data = await res.json()
 
@@ -28,6 +29,7 @@ export default function AddArtistForm() {
       setName('')
       setChannelInput('')
       setSpotifyId('')
+      setWikipediaJa('')
       router.refresh()
     } else {
       setResult({ ok: false, error: data.error ?? '追加に失敗しました' })
@@ -64,15 +66,27 @@ export default function AddArtistForm() {
           </div>
         </div>
 
-        <div>
-          <label className="text-xs text-dim block mb-1">Spotify Artist ID（任意）</label>
-          <input
-            type="text"
-            value={spotifyId}
-            onChange={e => setSpotifyId(e.target.value)}
-            placeholder="open.spotify.com/artist/ここのID"
-            className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white font-mono"
-          />
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="text-xs text-dim block mb-1">Spotify Artist ID（任意）</label>
+            <input
+              type="text"
+              value={spotifyId}
+              onChange={e => setSpotifyId(e.target.value)}
+              placeholder="open.spotify.com/artist/ここのID"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white font-mono"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-xs text-dim block mb-1">Wikipedia 記事名（任意）</label>
+            <input
+              type="text"
+              value={wikipediaJa}
+              onChange={e => setWikipediaJa(e.target.value)}
+              placeholder="Mrs. GREEN APPLE（ja.wikipedia.org の記事名）"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-dim bg-white"
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
