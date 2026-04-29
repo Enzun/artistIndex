@@ -1,4 +1,4 @@
-■ 現在の状態（2026-04-28時点）
+■ 現在の状態（2026-04-30時点）
     - active: Mrs. GREEN APPLE、サンボマスター
     - collecting: 数十件（データ蓄積中）
     - 毎日 0:05 JST に自動でデータ収集・指数計算が動いている（Vercel Cron）
@@ -10,37 +10,23 @@
 
 ■ アーティスト追加の流れ
 
-    【JSONから一括登録（通常ルート）】
-    1. data/artists.json にアーティスト名とチャンネルIDを追加
-           フォーマット:
-           [
-             { "name": "YOASOBI", "channel_id": "UCvP_..." },
-             ...
-           ]
-    2. 一括登録スクリプトを実行（collecting モードで登録される）
-           npx tsx --env-file=.env scripts/bulk_add_artists.ts data/artists.json
-    3. 実行後、data/bulk_add_report_YYYYMMDD-HHMMSS.json にレポートが保存される
-           - added:   追加成功
-           - skipped: 無効ID / 登録者不足 / 登録者非公開（重複は記録しない）
-    4. 翌日から自動でデータ収集が始まる
+    【Admin フォームから1人追加】
+    1. /admin を開く
+    2. アーティスト名を入力して「追加」
+    3. MusicBrainz + YouTube API + Wikipedia API が自動で走り、
+       YouTube / Spotify / Wikipedia を芋づる式に取得してDBに登録される
+    4. YouTubeが見つからない場合のみエラーになる（他は空欄のまま登録）
 
-    【スキップ基準】
-    - 重複（すでにDB登録済みのチャンネルID）
-    - 無効ID（YouTube APIに存在しないID）
-    - 登録者非公開
-    - 登録者20万人未満
+    【コマンドラインから一括追加】
+    1. 名前リストのファイルを用意（1行1アーティスト名 or JSON配列）
+    2. 実行:
+           npx tsx --env-file=.env scripts/auto_add_artists.ts data/names.txt
+           npx tsx --env-file=.env scripts/auto_add_artists.ts data/names.json
+    3. YouTube未解決・エラーのアーティストはログに出るので手動確認
 
-    【1人だけ追加する場合】
-    - collecting モード（データ収集のみ）
-          npx tsx --env-file=.env scripts/add_artist.ts <channel_id> "アーティスト名"
-    - active モード（即公開）
-          npx tsx --env-file=.env scripts/add_artist.ts <channel_id> "アーティスト名" --active
-
-    【過去の月次データを入れたい場合（SocialBlade等）】
-    - data/<name>_monthly.json を用意（フォーマットは data/mga_monthly.json 参照）
-    - dry-run で確認してから本実行
-          npx tsx --env-file=.env scripts/import_social_blade.ts <artist_id> --file data/<name>_monthly.json --dry-run
-          npx tsx --env-file=.env scripts/import_social_blade.ts <artist_id> --file data/<name>_monthly.json
+    【Spotify IDが未設定のアーティストを後から補完】
+           npx tsx --env-file=.env scripts/fill_spotify_ids.ts
+           npx tsx --env-file=.env scripts/fill_spotify_ids.ts --dry-run  # 確認のみ
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -58,7 +44,6 @@
 ■ 今後やること（優先順）
 
     1. アーティストを増やす
-        - artists.json（209件）を bulk_add_artists.ts で順次登録
         - collecting期間（目安：1〜2週間）でデータを溜める
         - Admin ページで確認しながら active に切り替え
 
@@ -86,14 +71,12 @@
 ■ 技術的な注意点
 
     - サンボマスターのmonthly historyデータ未投入（任意）
-    - back numberのチャンネルIDが誤登録の可能性あり → Supabase で確認・修正
     - YouTube APIクォータ：デフォルト10,000units/日
       1000アーティストでも1日20units（50件バッチ）で余裕あり
     - Vercel Hobby プランのcronは2本まで（現在2本使用中: fetch・calc）
+    - MusicBrainz API: 認証なし・1req/秒レート制限・インディーはカバー薄い
     - チャンネルBAN・削除時の扱い未対応
         現状：fetchがスキップ → 指数が据え置きになる
         本来：0再生扱いにして暴落させるべきだが、API障害との区別が難しいため保留
     - 将来hourly化するときは view_snapshots の snapshot_date(DATE) を
       snapshot_at(TIMESTAMPTZ) に変更するマイグレーションが必要
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
