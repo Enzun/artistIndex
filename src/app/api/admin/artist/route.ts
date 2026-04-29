@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+export const maxDuration = 30
+
 async function resolveChannel(channelInput: string) {
   const url = new URL('https://www.googleapis.com/youtube/v3/channels')
   url.searchParams.set('part', 'statistics,snippet')
@@ -45,12 +47,14 @@ async function resolveSpotify(spotifyId: string): Promise<{ popularity: number; 
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: 'grant_type=client_credentials',
+      signal: AbortSignal.timeout(8000),
     })
     if (!tokenRes.ok) return null
     const { access_token } = await tokenRes.json() as { access_token: string }
 
     const artistRes = await fetch(`https://api.spotify.com/v1/artists/${spotifyId}`, {
       headers: { Authorization: `Bearer ${access_token}` },
+      signal: AbortSignal.timeout(8000),
     })
     if (!artistRes.ok) return null
     const artist = await artistRes.json() as { popularity: number; followers: { total: number } }

@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
+export const maxDuration = 30
+
 async function searchSpotify(name: string): Promise<{ id: string; name: string; followers: number } | null> {
   try {
     const creds = Buffer.from(
@@ -18,6 +20,7 @@ async function searchSpotify(name: string): Promise<{ id: string; name: string; 
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: 'grant_type=client_credentials',
+      signal: AbortSignal.timeout(8000),
     })
     if (!tokenRes.ok) return null
     const { access_token } = await tokenRes.json() as { access_token: string }
@@ -29,6 +32,7 @@ async function searchSpotify(name: string): Promise<{ id: string; name: string; 
     url.searchParams.set('market', 'JP')
     const searchRes = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${access_token}` },
+      signal: AbortSignal.timeout(8000),
     })
     if (!searchRes.ok) return null
     const data = await searchRes.json() as {
