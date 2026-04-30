@@ -26,7 +26,7 @@ async function fetchYoutubeBatch(channelIds: string[]): Promise<YTItem[]> {
   url.searchParams.set('part', 'statistics')
   url.searchParams.set('id', channelIds.join(','))
   url.searchParams.set('key', process.env.YOUTUBE_API_KEY!)
-  const res = await fetch(url.toString())
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(20000) })
   if (!res.ok) throw new Error(`YouTube API error: ${res.status}`)
   const data = await res.json() as { items?: YTItem[] }
   return data.items ?? []
@@ -51,6 +51,7 @@ async function getSpotifyToken(): Promise<string> {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: 'grant_type=client_credentials',
+    signal: AbortSignal.timeout(15000),
   })
   if (!res.ok) throw new Error(`Spotify auth error: ${res.status}`)
   const data = await res.json() as { access_token: string }
@@ -62,6 +63,7 @@ async function fetchSpotifyBatch(ids: string[], token: string): Promise<SpotifyA
   url.searchParams.set('ids', ids.join(','))
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
   })
   if (!res.ok) throw new Error(`Spotify API error: ${res.status}`)
   const data = await res.json() as { artists: SpotifyArtist[] }
@@ -74,7 +76,10 @@ async function fetchWikipediaViews(title: string, date: string): Promise<number 
   const encoded = encodeURIComponent(title.replace(/ /g, '_'))
   const d = date.replace(/-/g, '')
   const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/ja.wikipedia.org/all-access/all-agents/${encoded}/daily/${d}/${d}`
-  const res = await fetch(url, { headers: { 'User-Agent': 'artistIndex-cron/1.0' } })
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'artistIndex-cron/1.0' },
+    signal: AbortSignal.timeout(10000),
+  })
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`Wikipedia API error: ${res.status} for ${title}`)
   const data = await res.json() as { items?: { views: number }[] }
@@ -105,7 +110,10 @@ export async function GET(request: Request) {
   const logger = new CronLogger('fetch', sb)
   await logger.start()
 
-  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const nowJST = Date.now() + 9 * 60 * 60 * 1000
+  const today = new Date(nowJST).toISOString().split('T')[0]
+  // Wikimedia pageview API has ~1 day lag; fetch yesterday's data
+  const wikiDate = new Date(nowJST - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const summary: Record<string, unknown> = { date: today, ok: 0, error: 0, errors: [] as string[] }
 
   try {
@@ -151,46 +159,52 @@ export async function GET(request: Request) {
       }
     }
 
-    // ── Spotify バッチ取得 ──
+    // ── Spotify + Wikipedia を並列取得 ──
     const spotifyMap = new Map<string, { popularity: number; followers: number }>()
-    const spotifyList = list.filter(a => a.spotify_artist_id)
-    if (spotifyList.length > 0) {
-      try {
-        const token = await getSpotifyToken()
-        const spChunks: string[][] = []
-        for (let i = 0; i < spotifyList.length; i += BATCH_SIZE) {
-          spChunks.push(spotifyList.slice(i, i + BATCH_SIZE).map(a => a.spotify_artist_id!))
-        }
-        for (const chunk of spChunks) {
-          try {
-            const items = await fetchSpotifyBatch(chunk, token)
-            for (const item of items) {
-              spotifyMap.set(item.id, { popularity: item.popularity, followers: item.followers.total })
-            }
-          } catch (err) {
-            ;(summary.errors as string[]).push(`Spotify batch error: ${err}`)
-          }
-        }
-      } catch (err) {
-        ;(summary.errors as string[]).push(`Spotify auth error: ${err}`)
-      }
-    }
-
-    // ── Wikipedia バッチ取得 ──
     const wikipediaMap = new Map<string, number>()
+
+    const spotifyList = list.filter(a => a.spotify_artist_id)
     const wikiList = list.filter(a => a.wikipedia_ja)
-    if (wikiList.length > 0) {
-      try {
-        const titles = wikiList.map(a => a.wikipedia_ja!)
-        const fetched = await fetchWikipediaBatch(titles, today)
-        for (const [title, views] of fetched) {
-          wikipediaMap.set(title, views)
+
+    await Promise.all([
+      // Spotify
+      (async () => {
+        if (spotifyList.length === 0) return
+        try {
+          const token = await getSpotifyToken()
+          const spChunks: string[][] = []
+          for (let i = 0; i < spotifyList.length; i += BATCH_SIZE) {
+            spChunks.push(spotifyList.slice(i, i + BATCH_SIZE).map(a => a.spotify_artist_id!))
+          }
+          for (const chunk of spChunks) {
+            try {
+              const items = await fetchSpotifyBatch(chunk, token)
+              for (const item of items) {
+                spotifyMap.set(item.id, { popularity: item.popularity, followers: item.followers.total })
+              }
+            } catch (err) {
+              ;(summary.errors as string[]).push(`Spotify batch error: ${err}`)
+            }
+          }
+        } catch (err) {
+          ;(summary.errors as string[]).push(`Spotify auth error: ${err}`)
         }
-        ;(summary as Record<string, unknown>).wikipedia_ok = fetched.size
-      } catch (err) {
-        ;(summary.errors as string[]).push(`Wikipedia batch error: ${err}`)
-      }
-    }
+      })(),
+      // Wikipedia（前日のデータを取得）
+      (async () => {
+        if (wikiList.length === 0) return
+        try {
+          const titles = wikiList.map(a => a.wikipedia_ja!)
+          const fetched = await fetchWikipediaBatch(titles, wikiDate)
+          for (const [title, views] of fetched) {
+            wikipediaMap.set(title, views)
+          }
+          ;(summary as Record<string, unknown>).wikipedia_ok = fetched.size
+        } catch (err) {
+          ;(summary.errors as string[]).push(`Wikipedia batch error: ${err}`)
+        }
+      })(),
+    ])
 
     // ── upsert 行を組み立て ──
     type UpsertRow = {
