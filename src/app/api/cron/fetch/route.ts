@@ -184,8 +184,9 @@ export async function GET(request: Request) {
 
   const nowJST = Date.now() + 9 * 60 * 60 * 1000
   const today = new Date(nowJST).toISOString().split('T')[0]
-  // Wikimedia pageview API has ~1 day lag; fetch yesterday's data
-  const wikiDate = new Date(nowJST - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  // WikimediaはUTC基準で集計。Cronは JST 00:01 = UTC 15:01 に実行されるため
+  // UTC当日はまだ未確定。UTC前日（= JST2日前）のデータを取得する。
+  const wikiDate = new Date(nowJST - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const summary: Record<string, unknown> = { date: today, ok: 0, error: 0, errors: [] as string[] }
 
   try {
