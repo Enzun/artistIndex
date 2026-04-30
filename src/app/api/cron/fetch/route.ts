@@ -65,7 +65,10 @@ async function fetchSpotifyBatch(ids: string[], token: string): Promise<SpotifyA
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15000),
   })
-  if (!res.ok) throw new Error(`Spotify API error: ${res.status}`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Spotify API error: ${res.status} ${body}`)
+  }
   const data = await res.json() as { artists: SpotifyArtist[] }
   return (data.artists ?? []).filter(Boolean)
 }
