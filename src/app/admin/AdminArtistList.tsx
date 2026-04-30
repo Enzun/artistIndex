@@ -53,6 +53,7 @@ export default function AdminArtistList({
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const cancelRef = useRef(false)
 
   const filtered = query.trim()
     ? artists.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
@@ -88,8 +89,13 @@ export default function AdminArtistList({
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') handleSave()
-    if (e.key === 'Escape') setEditing(null)
+    if (e.key === 'Enter') inputRef.current?.blur()  // blur → onBlur → handleSave（一本化）
+    if (e.key === 'Escape') { cancelRef.current = true; setEditing(null) }
+  }
+
+  async function handleBlur() {
+    if (cancelRef.current) { cancelRef.current = false; return }
+    await handleSave()
   }
 
   return (
@@ -170,7 +176,7 @@ export default function AdminArtistList({
                           value={editing.value}
                           onChange={e => setEditing({ ...editing, value: e.target.value })}
                           onKeyDown={handleKeyDown}
-                          onBlur={handleSave}
+                          onBlur={handleBlur}
                           disabled={saving}
                           placeholder="Spotify Artist ID"
                           className="text-xs font-mono border border-border rounded px-1.5 py-0.5 w-44 focus:outline-none focus:border-dim bg-white"
@@ -205,7 +211,7 @@ export default function AdminArtistList({
                           value={editing.value}
                           onChange={e => setEditing({ ...editing, value: e.target.value })}
                           onKeyDown={handleKeyDown}
-                          onBlur={handleSave}
+                          onBlur={handleBlur}
                           disabled={saving}
                           placeholder="Wikipedia記事名"
                           className="text-xs border border-border rounded px-1.5 py-0.5 w-40 focus:outline-none focus:border-dim bg-white"
