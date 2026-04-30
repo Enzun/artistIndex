@@ -86,17 +86,28 @@ async function fetchWikipediaViews(title: string, date: string): Promise<number 
   return data.items?.[0]?.views ?? null
 }
 
-async function fetchWikipediaBatch(titles: string[], date: string): Promise<Map<string, number>> {
-  const result = new Map<string, number>()
+async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
+  found: Map<string, number>
+  notFound: string[]
+  failed: string[]
+}> {
+  const found = new Map<string, number>()
+  const notFound: string[] = []
+  const failed: string[] = []
   const CONCURRENCY = 20
   for (let i = 0; i < titles.length; i += CONCURRENCY) {
     const chunk = titles.slice(i, i + CONCURRENCY)
     const settled = await Promise.allSettled(chunk.map(t => fetchWikipediaViews(t, date)))
     settled.forEach((r, j) => {
-      if (r.status === 'fulfilled' && r.value !== null) result.set(chunk[j], r.value)
+      if (r.status === 'fulfilled') {
+        if (r.value !== null) found.set(chunk[j], r.value)
+        else notFound.push(chunk[j])
+      } else {
+        failed.push(`${chunk[j]}: ${r.reason}`)
+      }
     })
   }
-  return result
+  return { found, notFound, failed }
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -170,6 +181,7 @@ export async function GET(request: Request) {
       // Spotify
       (async () => {
         if (spotifyList.length === 0) return
+        summary.spotify_attempted = spotifyList.length
         try {
           const token = await getSpotifyToken()
           const spChunks: string[][] = []
@@ -186,6 +198,7 @@ export async function GET(request: Request) {
               ;(summary.errors as string[]).push(`Spotify batch error: ${err}`)
             }
           }
+          summary.spotify_ok = spotifyMap.size
         } catch (err) {
           ;(summary.errors as string[]).push(`Spotify auth error: ${err}`)
         }
@@ -195,11 +208,18 @@ export async function GET(request: Request) {
         if (wikiList.length === 0) return
         try {
           const titles = wikiList.map(a => a.wikipedia_ja!)
-          const fetched = await fetchWikipediaBatch(titles, wikiDate)
-          for (const [title, views] of fetched) {
+          const { found, notFound, failed } = await fetchWikipediaBatch(titles, wikiDate)
+          for (const [title, views] of found) {
             wikipediaMap.set(title, views)
           }
-          ;(summary as Record<string, unknown>).wikipedia_ok = fetched.size
+          summary.wikipedia_date = wikiDate
+          summary.wikipedia_ok = found.size
+          summary.wikipedia_not_found = notFound.length
+          summary.wikipedia_failed = failed.length
+          if (notFound.length > 0) summary.wikipedia_not_found_sample = notFound.slice(0, 5)
+          if (failed.length > 0) {
+            for (const e of failed) (summary.errors as string[]).push(`Wikipedia fetch error: ${e}`)
+          }
         } catch (err) {
           ;(summary.errors as string[]).push(`Wikipedia batch error: ${err}`)
         }
