@@ -78,19 +78,32 @@ async function fetchSpotifyBatch(ids: string[], token: string): Promise<SpotifyA
 const WIKI_UA = 'artistIndex-cron/1.0 (https://artist-index.vercel.app/)'
 
 // Top 1000記事を1リクエストで取得（レートリミット回避）
+// Wikimediaのトップページデータは公開に最大2日かかるため、
+// 昨日が404なら一昨日にフォールバック
 async function fetchWikipediaTop(date: string): Promise<Map<string, number>> {
-  const [year, month, day] = date.split('-')
-  const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/top/ja.wikipedia.org/all-access/${year}/${month}/${day}`
-  const res = await fetch(url, {
-    headers: { 'User-Agent': WIKI_UA },
-    signal: AbortSignal.timeout(15000),
-  })
-  if (!res.ok) throw new Error(`Wikipedia top error: ${res.status}`)
   type Article = { article: string; views: number }
+  const tryDate = async (d: string) => {
+    const [year, month, day] = d.split('-')
+    const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/top/ja.wikipedia.org/all-access/${year}/${month}/${day}`
+    const res = await fetch(url, {
+      headers: { 'User-Agent': WIKI_UA },
+      signal: AbortSignal.timeout(15000),
+    })
+    return res
+  }
+
+  let res = await tryDate(date)
+  if (res.status === 404) {
+    // 1日さらに遡る
+    const prev = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000)
+      .toISOString().split('T')[0]
+    res = await tryDate(prev)
+  }
+  if (!res.ok) throw new Error(`Wikipedia top error: ${res.status}`)
+
   const data = await res.json() as { items: [{ articles: Article[] }] }
   const map = new Map<string, number>()
   for (const { article, views } of data.items[0].articles) {
-    // スペース版・アンダースコア版の両方をキーとして登録
     map.set(article, views)
     map.set(article.replace(/_/g, ' '), views)
   }
