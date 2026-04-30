@@ -18,6 +18,8 @@ type SnapshotStat = {
   artist_id: string
   count: number
   last_date: string | null
+  spotify_null: boolean
+  wikipedia_null: boolean
 }
 
 type CronLog = {
@@ -44,7 +46,7 @@ export default async function AdminPage() {
       .order('name'),
     supabase
       .from('view_snapshots')
-      .select('artist_id, snapshot_date')
+      .select('artist_id, snapshot_date, spotify_popularity, wikipedia_pageviews')
       .order('snapshot_date', { ascending: false }),
     supabase
       .from('cron_logs')
@@ -53,11 +55,17 @@ export default async function AdminPage() {
       .limit(30),
   ])
 
-  // スナップショット統計をアーティストIDでまとめる
+  // スナップショット統計をアーティストIDでまとめる（最新1件のnull状態を記録）
   const statsMap = new Map<string, SnapshotStat>()
   for (const row of (snapshotStats ?? [])) {
     if (!statsMap.has(row.artist_id)) {
-      statsMap.set(row.artist_id, { artist_id: row.artist_id, count: 0, last_date: row.snapshot_date })
+      statsMap.set(row.artist_id, {
+        artist_id: row.artist_id,
+        count: 0,
+        last_date: row.snapshot_date,
+        spotify_null: row.spotify_popularity === null,
+        wikipedia_null: row.wikipedia_pageviews === null,
+      })
     }
     statsMap.get(row.artist_id)!.count++
   }

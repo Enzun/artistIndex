@@ -18,6 +18,8 @@ type Artist = {
 type SnapshotStat = {
   count: number
   last_date: string | null
+  spotify_null: boolean
+  wikipedia_null: boolean
 }
 
 export default function AdminArtistList({
@@ -105,7 +107,7 @@ export default function AdminArtistList({
                         href={`https://open.spotify.com/artist/${artist.spotify_artist_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-mono text-dim hover:text-mga transition-colors"
+                        className={`text-xs font-mono hover:text-mga transition-colors ${stat?.spotify_null ? 'text-red-400' : 'text-dim'}`}
                         title="Spotifyで開く"
                       >
                         {artist.spotify_artist_id}
@@ -122,7 +124,7 @@ export default function AdminArtistList({
                         href={`https://ja.wikipedia.org/wiki/${encodeURIComponent(artist.wikipedia_ja.replace(/ /g, '_'))}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-dim hover:text-text transition-colors"
+                        className={`text-xs hover:text-text transition-colors ${stat?.wikipedia_null ? 'text-red-400' : 'text-dim'}`}
                         title="Wikipediaで開く"
                       >
                         {artist.wikipedia_ja}
