@@ -94,7 +94,7 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
   const found = new Map<string, number>()
   const notFound: string[] = []
   const failed: string[] = []
-  const CONCURRENCY = 20
+  const CONCURRENCY = 5
   for (let i = 0; i < titles.length; i += CONCURRENCY) {
     const chunk = titles.slice(i, i + CONCURRENCY)
     const settled = await Promise.allSettled(chunk.map(t => fetchWikipediaViews(t, date)))
@@ -106,6 +106,8 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
         failed.push(`${chunk[j]}: ${r.reason}`)
       }
     })
+    // Wikimedia rate limit対策: チャンク間に200ms待機
+    if (i + CONCURRENCY < titles.length) await new Promise(r => setTimeout(r, 200))
   }
   return { found, notFound, failed }
 }
