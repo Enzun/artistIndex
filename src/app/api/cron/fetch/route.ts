@@ -75,12 +75,35 @@ async function fetchSpotifyBatch(ids: string[], token: string): Promise<SpotifyA
 
 // ─── Wikipedia ───────────────────────────────────────────────────────────────
 
+const WIKI_UA = 'artistIndex-cron/1.0 (https://artist-index.vercel.app/)'
+
+// Top 1000記事を1リクエストで取得（レートリミット回避）
+async function fetchWikipediaTop(date: string): Promise<Map<string, number>> {
+  const [year, month, day] = date.split('-')
+  const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/top/ja.wikipedia.org/all-access/${year}/${month}/${day}`
+  const res = await fetch(url, {
+    headers: { 'User-Agent': WIKI_UA },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) throw new Error(`Wikipedia top error: ${res.status}`)
+  type Article = { article: string; views: number }
+  const data = await res.json() as { items: [{ articles: Article[] }] }
+  const map = new Map<string, number>()
+  for (const { article, views } of data.items[0].articles) {
+    // スペース版・アンダースコア版の両方をキーとして登録
+    map.set(article, views)
+    map.set(article.replace(/_/g, ' '), views)
+  }
+  return map
+}
+
+// Top 1000に入らなかった記事を個別取得（件数は少ないはず）
 async function fetchWikipediaViews(title: string, date: string): Promise<number | null> {
   const encoded = encodeURIComponent(title.replace(/ /g, '_'))
   const d = date.replace(/-/g, '')
   const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/ja.wikipedia.org/all-access/all-agents/${encoded}/daily/${d}/${d}`
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'artistIndex-cron/1.0' },
+    headers: { 'User-Agent': WIKI_UA },
     signal: AbortSignal.timeout(10000),
   })
   if (res.status === 404) return null
@@ -97,9 +120,29 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
   const found = new Map<string, number>()
   const notFound: string[] = []
   const failed: string[] = []
-  const CONCURRENCY = 5
-  for (let i = 0; i < titles.length; i += CONCURRENCY) {
-    const chunk = titles.slice(i, i + CONCURRENCY)
+
+  // Step 1: Top 1000で一括取得
+  let topMap = new Map<string, number>()
+  try {
+    topMap = await fetchWikipediaTop(date)
+  } catch (err) {
+    failed.push(`top pages: ${err}`)
+  }
+
+  const remaining: string[] = []
+  for (const title of titles) {
+    const views = topMap.get(title) ?? topMap.get(title.replace(/ /g, '_'))
+    if (views !== undefined) {
+      found.set(title, views)
+    } else {
+      remaining.push(title)
+    }
+  }
+
+  // Step 2: Top 1000外の記事を個別取得（3並列・500ms間隔）
+  const CONCURRENCY = 3
+  for (let i = 0; i < remaining.length; i += CONCURRENCY) {
+    const chunk = remaining.slice(i, i + CONCURRENCY)
     const settled = await Promise.allSettled(chunk.map(t => fetchWikipediaViews(t, date)))
     settled.forEach((r, j) => {
       if (r.status === 'fulfilled') {
@@ -109,9 +152,9 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
         failed.push(`${chunk[j]}: ${r.reason}`)
       }
     })
-    // Wikimedia rate limit対策: チャンク間に200ms待機
-    if (i + CONCURRENCY < titles.length) await new Promise(r => setTimeout(r, 200))
+    if (i + CONCURRENCY < remaining.length) await new Promise(r => setTimeout(r, 500))
   }
+
   return { found, notFound, failed }
 }
 
