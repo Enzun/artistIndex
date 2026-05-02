@@ -16,7 +16,6 @@ type Artist = {
 type SnapshotStat = {
   artist_id: string
   count: number
-  last_date: string | null
   last_yt_increase_date: string | null
   wikipedia_null: boolean
 }
@@ -35,7 +34,8 @@ export default async function AdminPage() {
 
   const [
     { data: artists },
-    { data: snapshotStats },
+    { data: latestSnaps },
+    { data: ytIncrSnaps },
     { data: cronLogs },
   ] = await Promise.all([
     supabase
@@ -43,9 +43,17 @@ export default async function AdminPage() {
       .select('id, name, status, current_index, youtube_channel_id, wikipedia_ja, created_at, thumbnail_url')
       .order('status')
       .order('name'),
+    // 最新スナップ（wikipedia_null チェック用）: 降順で先頭 = 各アーティストの最新
     supabase
       .from('view_snapshots')
-      .select('artist_id, snapshot_date, daily_increase, wikipedia_pageviews')
+      .select('artist_id, snapshot_date, wikipedia_pageviews')
+      .order('snapshot_date', { ascending: false })
+      .limit(1000),
+    // YT更新日: daily_increase > 0 のみ取得 → 行数が少なくデフォルト上限に引っかからない
+    supabase
+      .from('view_snapshots')
+      .select('artist_id, snapshot_date')
+      .gt('daily_increase', 0)
       .order('snapshot_date', { ascending: false }),
     supabase
       .from('cron_logs')
@@ -56,20 +64,21 @@ export default async function AdminPage() {
 
   // スナップショット統計をアーティストIDでまとめる
   const statsMap = new Map<string, SnapshotStat>()
-  for (const row of (snapshotStats ?? [])) {
+  for (const row of (latestSnaps ?? [])) {
     if (!statsMap.has(row.artist_id)) {
       statsMap.set(row.artist_id, {
         artist_id: row.artist_id,
         count: 0,
-        last_date: row.snapshot_date,
         last_yt_increase_date: null,
         wikipedia_null: row.wikipedia_pageviews === null,
       })
     }
-    const stat = statsMap.get(row.artist_id)!
-    stat.count++
-    // daily_increase > 0 だった最終日を記録（YT更新確認用）
-    if (stat.last_yt_increase_date === null && (row.daily_increase ?? 0) > 0) {
+    statsMap.get(row.artist_id)!.count++
+  }
+  // YT更新日: 各アーティストの最新 daily_increase > 0 の日付
+  for (const row of (ytIncrSnaps ?? [])) {
+    const stat = statsMap.get(row.artist_id)
+    if (stat && stat.last_yt_increase_date === null) {
       stat.last_yt_increase_date = row.snapshot_date
     }
   }

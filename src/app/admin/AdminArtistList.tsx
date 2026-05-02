@@ -17,7 +17,6 @@ type Artist = {
 
 type SnapshotStat = {
   count: number
-  last_date: string | null
   last_yt_increase_date: string | null
   wikipedia_null: boolean
 }
@@ -105,7 +104,6 @@ export default function AdminArtistList({
               <th className="text-right px-4 py-2.5 font-medium">YT更新</th>
               <th className="text-right px-4 py-2.5 font-medium">指数</th>
               <th className="text-right px-4 py-2.5 font-medium">スナップ</th>
-              <th className="text-right px-4 py-2.5 font-medium">最終取得</th>
             </tr>
           </thead>
           <tbody>
@@ -115,13 +113,17 @@ export default function AdminArtistList({
               const isEditingWiki = editing?.artistId === artist.id && editing.field === 'wikipedia'
 
               // YT更新日の色分け
-              const ytDaysAgo = stat?.last_yt_increase_date
-                ? Math.floor((Date.now() - new Date(stat.last_yt_increase_date).getTime()) / 86400000)
+              const ytDate = stat?.last_yt_increase_date ?? null
+              const ytDaysAgo = ytDate
+                ? Math.floor((Date.now() - new Date(ytDate).getTime()) / 86400000)
                 : null
               const ytColor = ytDaysAgo === null ? 'text-border'
                 : ytDaysAgo <= 7  ? 'text-green-500'
                 : ytDaysAgo <= 21 ? 'text-yellow-500'
                 : 'text-red-400'
+              const ytLabel = ytDate
+                ? (() => { const d = new Date(ytDate); return `${d.getMonth()+1}/${d.getDate()}` })()
+                : '—'
 
               return (
                 <tr key={artist.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-surface2/50'}`}>
@@ -188,10 +190,10 @@ export default function AdminArtistList({
                     </div>
                   </td>
 
-                  {/* YT更新列: daily_increase>0 だった最終日からの経過日数 */}
+                  {/* YT更新列: daily_increase>0 だった最終日 */}
                   <td className={`px-4 py-2.5 text-right text-xs tabular-nums ${ytColor}`}
-                      title={stat?.last_yt_increase_date ?? 'データなし'}>
-                    {ytDaysAgo === null ? '—' : ytDaysAgo === 0 ? '今日' : `${ytDaysAgo}日前`}
+                      title={ytDate ?? 'データなし'}>
+                    {ytLabel}
                   </td>
 
                   <td className="px-4 py-2.5 text-right tabular-nums">
@@ -200,15 +202,12 @@ export default function AdminArtistList({
                   <td className="px-4 py-2.5 text-right tabular-nums text-dim">
                     {stat ? stat.count.toLocaleString() : 0}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-dim text-xs">
-                    {stat?.last_date ?? '—'}
-                  </td>
                 </tr>
               )
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-dim text-xs">
+                <td colSpan={5} className="px-4 py-6 text-center text-dim text-xs">
                   「{query}」に一致するアーティストはいません
                 </td>
               </tr>
