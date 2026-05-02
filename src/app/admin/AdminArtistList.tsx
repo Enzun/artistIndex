@@ -34,9 +34,11 @@ function WikipediaIcon() {
 export default function AdminArtistList({
   artists,
   statsMap,
+  hIndexMap,
 }: {
   artists: Artist[]
   statsMap: Record<string, SnapshotStat>
+  hIndexMap: Record<string, number | null>
 }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
@@ -102,7 +104,7 @@ export default function AdminArtistList({
               <th className="text-left px-4 py-2.5 font-medium">名前</th>
               <th className="text-left px-4 py-2.5 font-medium">Wikipedia</th>
               <th className="text-right px-4 py-2.5 font-medium">YT更新</th>
-              <th className="text-right px-4 py-2.5 font-medium">指数</th>
+              <th className="text-right px-4 py-2.5 font-medium">H式指数</th>
               <th className="text-right px-4 py-2.5 font-medium">スナップ</th>
             </tr>
           </thead>
@@ -196,8 +198,11 @@ export default function AdminArtistList({
                     {ytLabel}
                   </td>
 
-                  <td className="px-4 py-2.5 text-right tabular-nums">
-                    {isActive ? Math.floor(artist.current_index).toLocaleString() : '—'}
+                  <td className="px-4 py-2.5 text-right tabular-nums"
+                      title={`現行指数: ${artist.current_index ? Math.floor(artist.current_index).toLocaleString() : '—'}`}>
+                    {hIndexMap[artist.id] != null
+                      ? Math.floor(hIndexMap[artist.id]!).toLocaleString()
+                      : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-dim">
                     {stat ? stat.count.toLocaleString() : 0}

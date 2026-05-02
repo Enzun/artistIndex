@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import AdminArtistList from './AdminArtistList'
 import AddArtistForm from './AddArtistForm'
+import { calcHIndex, DEFAULT_H_PARAMS, type SnapRow } from '@/lib/indexFormula'
 
 type Artist = {
   id: string
@@ -36,6 +37,7 @@ export default async function AdminPage() {
     { data: artists },
     { data: latestSnaps },
     { data: ytIncrSnaps },
+    { data: allSnaps },
     { data: cronLogs },
   ] = await Promise.all([
     supabase
@@ -43,18 +45,25 @@ export default async function AdminPage() {
       .select('id, name, status, current_index, youtube_channel_id, wikipedia_ja, created_at, thumbnail_url')
       .order('status')
       .order('name'),
-    // 最新スナップ（wikipedia_null チェック用）: 降順で先頭 = 各アーティストの最新
+    // 最新スナップ（wikipedia_null チェック用）
     supabase
       .from('view_snapshots')
       .select('artist_id, snapshot_date, wikipedia_pageviews')
       .order('snapshot_date', { ascending: false })
       .limit(1000),
-    // YT更新日: daily_increase > 0 のみ取得 → 行数が少なくデフォルト上限に引っかからない
+    // YT更新日: daily_increase > 0 のみ取得
     supabase
       .from('view_snapshots')
       .select('artist_id, snapshot_date')
       .gt('daily_increase', 0)
       .order('snapshot_date', { ascending: false }),
+    // H式計算用: 全スナップ（昇順）
+    supabase
+      .from('view_snapshots')
+      .select('artist_id, snapshot_date, total_views, daily_increase, wikipedia_pageviews')
+      .order('artist_id')
+      .order('snapshot_date', { ascending: true })
+      .limit(20000),
     supabase
       .from('cron_logs')
       .select('id, job, status, summary, created_at, finished_at')
@@ -81,6 +90,17 @@ export default async function AdminPage() {
     if (stat && stat.last_yt_increase_date === null) {
       stat.last_yt_increase_date = row.snapshot_date
     }
+  }
+
+  // H式指数をアーティストごとに計算
+  const snapsByArtist = new Map<string, SnapRow[]>()
+  for (const row of (allSnaps ?? [])) {
+    if (!snapsByArtist.has(row.artist_id)) snapsByArtist.set(row.artist_id, [])
+    snapsByArtist.get(row.artist_id)!.push(row as SnapRow)
+  }
+  const hIndexMap: Record<string, number | null> = {}
+  for (const [artistId, snaps] of snapsByArtist) {
+    hIndexMap[artistId] = calcHIndex(snaps, DEFAULT_H_PARAMS)
   }
 
   const artistList = (artists ?? []) as Artist[]
@@ -123,6 +143,7 @@ export default async function AdminPage() {
       <AdminArtistList
         artists={artistList}
         statsMap={Object.fromEntries(statsMap)}
+        hIndexMap={hIndexMap}
       />
 
       {/* Cronログ */}
