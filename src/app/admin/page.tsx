@@ -8,7 +8,6 @@ type Artist = {
   status: string
   current_index: number
   youtube_channel_id: string
-  spotify_artist_id: string | null
   wikipedia_ja: string | null
   created_at: string
   thumbnail_url: string | null
@@ -18,7 +17,7 @@ type SnapshotStat = {
   artist_id: string
   count: number
   last_date: string | null
-  spotify_null: boolean
+  last_yt_increase_date: string | null
   wikipedia_null: boolean
 }
 
@@ -41,12 +40,12 @@ export default async function AdminPage() {
   ] = await Promise.all([
     supabase
       .from('artists')
-      .select('id, name, status, current_index, youtube_channel_id, spotify_artist_id, wikipedia_ja, created_at, thumbnail_url')
+      .select('id, name, status, current_index, youtube_channel_id, wikipedia_ja, created_at, thumbnail_url')
       .order('status')
       .order('name'),
     supabase
       .from('view_snapshots')
-      .select('artist_id, snapshot_date, spotify_popularity, wikipedia_pageviews')
+      .select('artist_id, snapshot_date, daily_increase, wikipedia_pageviews')
       .order('snapshot_date', { ascending: false }),
     supabase
       .from('cron_logs')
@@ -55,7 +54,7 @@ export default async function AdminPage() {
       .limit(30),
   ])
 
-  // スナップショット統計をアーティストIDでまとめる（最新1件のnull状態を記録）
+  // スナップショット統計をアーティストIDでまとめる
   const statsMap = new Map<string, SnapshotStat>()
   for (const row of (snapshotStats ?? [])) {
     if (!statsMap.has(row.artist_id)) {
@@ -63,11 +62,16 @@ export default async function AdminPage() {
         artist_id: row.artist_id,
         count: 0,
         last_date: row.snapshot_date,
-        spotify_null: row.spotify_popularity === null,
+        last_yt_increase_date: null,
         wikipedia_null: row.wikipedia_pageviews === null,
       })
     }
-    statsMap.get(row.artist_id)!.count++
+    const stat = statsMap.get(row.artist_id)!
+    stat.count++
+    // daily_increase > 0 だった最終日を記録（YT更新確認用）
+    if (stat.last_yt_increase_date === null && (row.daily_increase ?? 0) > 0) {
+      stat.last_yt_increase_date = row.snapshot_date
+    }
   }
 
   const artistList = (artists ?? []) as Artist[]

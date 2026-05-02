@@ -10,7 +10,6 @@ type Artist = {
   status: string
   current_index: number
   youtube_channel_id: string
-  spotify_artist_id: string | null
   wikipedia_ja: string | null
   created_at: string
   thumbnail_url: string | null
@@ -19,19 +18,11 @@ type Artist = {
 type SnapshotStat = {
   count: number
   last_date: string | null
-  spotify_null: boolean
+  last_yt_increase_date: string | null
   wikipedia_null: boolean
 }
 
-type EditingState = { artistId: string; field: 'spotify' | 'wikipedia'; value: string }
-
-function SpotifyIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-    </svg>
-  )
-}
+type EditingState = { artistId: string; field: 'wikipedia'; value: string }
 
 function WikipediaIcon() {
   return (
@@ -59,8 +50,8 @@ export default function AdminArtistList({
     ? artists.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
     : artists
 
-  function startEdit(artistId: string, field: 'spotify' | 'wikipedia', current: string | null) {
-    setEditing({ artistId, field, value: current ?? '' })
+  function startEdit(artistId: string, current: string | null) {
+    setEditing({ artistId, field: 'wikipedia', value: current ?? '' })
     setTimeout(() => inputRef.current?.focus(), 0)
   }
 
@@ -69,18 +60,13 @@ export default function AdminArtistList({
     const artist = artists.find(a => a.id === editing.artistId)
     if (!artist) return
 
-    const current = editing.field === 'spotify' ? artist.spotify_artist_id : artist.wikipedia_ja
-    if (editing.value === (current ?? '')) { setEditing(null); return }
+    if (editing.value === (artist.wikipedia_ja ?? '')) { setEditing(null); return }
 
     setSaving(true)
-    const body = editing.field === 'spotify'
-      ? { spotify_artist_id: editing.value || null }
-      : { wikipedia_ja: editing.value || null }
-
     await fetch(`/api/admin/artist/${editing.artistId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ wikipedia_ja: editing.value || null }),
     })
 
     setSaving(false)
@@ -115,8 +101,8 @@ export default function AdminArtistList({
           <thead>
             <tr className="border-b border-border text-xs text-dim">
               <th className="text-left px-4 py-2.5 font-medium">名前</th>
-              <th className="text-left px-4 py-2.5 font-medium">Spotify</th>
               <th className="text-left px-4 py-2.5 font-medium">Wikipedia</th>
+              <th className="text-right px-4 py-2.5 font-medium">YT更新</th>
               <th className="text-right px-4 py-2.5 font-medium">指数</th>
               <th className="text-right px-4 py-2.5 font-medium">スナップ</th>
               <th className="text-right px-4 py-2.5 font-medium">最終取得</th>
@@ -126,8 +112,17 @@ export default function AdminArtistList({
             {filtered.map((artist, i) => {
               const stat = statsMap[artist.id]
               const isActive = artist.status === 'active'
-              const isEditingSpotify = editing?.artistId === artist.id && editing.field === 'spotify'
               const isEditingWiki = editing?.artistId === artist.id && editing.field === 'wikipedia'
+
+              // YT更新日の色分け
+              const ytDaysAgo = stat?.last_yt_increase_date
+                ? Math.floor((Date.now() - new Date(stat.last_yt_increase_date).getTime()) / 86400000)
+                : null
+              const ytColor = ytDaysAgo === null ? 'text-border'
+                : ytDaysAgo <= 7  ? 'text-green-500'
+                : ytDaysAgo <= 21 ? 'text-yellow-500'
+                : 'text-red-400'
+
               return (
                 <tr key={artist.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-surface2/50'}`}>
                   {/* 名前列 */}
@@ -158,41 +153,6 @@ export default function AdminArtistList({
                     </div>
                   </td>
 
-                  {/* Spotify列: アイコン（リンク）+ ID（クリックで編集） */}
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <a
-                        href={artist.spotify_artist_id ? `https://open.spotify.com/artist/${artist.spotify_artist_id}` : '#'}
-                        target="_blank" rel="noopener noreferrer"
-                        onClick={e => { if (!artist.spotify_artist_id) e.preventDefault() }}
-                        className={`flex-shrink-0 transition-colors ${artist.spotify_artist_id ? 'text-dim hover:text-[#1DB954]' : 'text-border cursor-default'}`}
-                        title={artist.spotify_artist_id ? 'Spotifyで開く' : undefined}
-                      >
-                        <SpotifyIcon />
-                      </a>
-                      {isEditingSpotify ? (
-                        <input
-                          ref={inputRef}
-                          value={editing.value}
-                          onChange={e => setEditing({ ...editing, value: e.target.value })}
-                          onKeyDown={handleKeyDown}
-                          onBlur={handleBlur}
-                          disabled={saving}
-                          placeholder="Spotify Artist ID"
-                          className="text-xs font-mono border border-border rounded px-1.5 py-0.5 w-44 focus:outline-none focus:border-dim bg-white"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => startEdit(artist.id, 'spotify', artist.spotify_artist_id)}
-                          className={`text-xs font-mono text-left hover:text-text transition-colors ${stat?.spotify_null ? 'text-red-400' : artist.spotify_artist_id ? 'text-dim' : 'text-border'}`}
-                          title="クリックして編集"
-                        >
-                          {artist.spotify_artist_id ?? '—'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-
                   {/* Wikipedia列: アイコン（リンク）+ タイトル（クリックで編集） */}
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1.5">
@@ -218,7 +178,7 @@ export default function AdminArtistList({
                         />
                       ) : (
                         <button
-                          onClick={() => startEdit(artist.id, 'wikipedia', artist.wikipedia_ja)}
+                          onClick={() => startEdit(artist.id, artist.wikipedia_ja)}
                           className={`text-xs text-left hover:text-text transition-colors truncate max-w-[10rem] ${stat?.wikipedia_null ? 'text-red-400' : artist.wikipedia_ja ? 'text-dim' : 'text-border'}`}
                           title={artist.wikipedia_ja ?? 'クリックして編集'}
                         >
@@ -226,6 +186,12 @@ export default function AdminArtistList({
                         </button>
                       )}
                     </div>
+                  </td>
+
+                  {/* YT更新列: daily_increase>0 だった最終日からの経過日数 */}
+                  <td className={`px-4 py-2.5 text-right text-xs tabular-nums ${ytColor}`}
+                      title={stat?.last_yt_increase_date ?? 'データなし'}>
+                    {ytDaysAgo === null ? '—' : ytDaysAgo === 0 ? '今日' : `${ytDaysAgo}日前`}
                   </td>
 
                   <td className="px-4 py-2.5 text-right tabular-nums">

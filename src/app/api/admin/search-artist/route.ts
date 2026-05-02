@@ -35,7 +35,6 @@ async function mbSearch(name: string): Promise<string | null> {
 }
 
 type MBUrls = {
-  spotify_id: string | null
   wikipedia_ja: string | null
   youtube_channel_id: string | null
 }
@@ -48,14 +47,12 @@ async function mbUrls(mbid: string): Promise<MBUrls> {
       signal: AbortSignal.timeout(8000),
     }
   )
-  const result: MBUrls = { spotify_id: null, wikipedia_ja: null, youtube_channel_id: null }
+  const result: MBUrls = { wikipedia_ja: null, youtube_channel_id: null }
   if (!res.ok) return result
   const data = await res.json() as { relations: Array<{ url: { resource: string } }> }
   for (const rel of (data.relations ?? [])) {
     const href = rel.url?.resource ?? ''
-    if (!result.spotify_id && href.startsWith('https://open.spotify.com/artist/')) {
-      result.spotify_id = href.split('/').at(-1) ?? null
-    } else if (!result.wikipedia_ja && href.startsWith('https://ja.wikipedia.org/wiki/')) {
+    if (!result.wikipedia_ja && href.startsWith('https://ja.wikipedia.org/wiki/')) {
       result.wikipedia_ja = decodeURIComponent(
         href.replace('https://ja.wikipedia.org/wiki/', '')
       ).replace(/_/g, ' ')
@@ -105,13 +102,12 @@ export async function GET(request: NextRequest) {
   ])
 
   // MusicBrainz url-rels（MBID が取れた場合のみ）
-  const urls = mbid ? await mbUrls(mbid) : { spotify_id: null, wikipedia_ja: null, youtube_channel_id: null }
+  const urls = mbid ? await mbUrls(mbid) : { wikipedia_ja: null, youtube_channel_id: null }
 
   // Wikipedia: MusicBrainz にあればそちらを優先（編集者が確認済みのリンク）、なければ検索結果
   const wikipediaTitle = urls.wikipedia_ja ?? wpTitle
 
   return NextResponse.json({
-    spotify:   urls.spotify_id         ? { id: urls.spotify_id }      : null,
     wikipedia: wikipediaTitle          ? { title: wikipediaTitle }     : null,
     youtube:   urls.youtube_channel_id ? { id: urls.youtube_channel_id } : null,
   })

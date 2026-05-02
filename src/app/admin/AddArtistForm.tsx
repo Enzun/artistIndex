@@ -9,7 +9,6 @@ type AddResult = {
     name: string
     channelTitle: string
     youtube: string
-    spotify: string | null
     wikipedia: string | null
   }
 } | {
@@ -77,10 +76,6 @@ export default function AddArtistForm() {
               </p>
               <p className="text-dim">
                 YouTube: <span className="text-text font-mono">{result.artist.youtube}</span>
-                {'　'}
-                Spotify: {result.artist.spotify
-                  ? <span className="text-text font-mono">{result.artist.spotify}</span>
-                  : <span className="text-border">—</span>}
                 {'　'}
                 Wikipedia: {result.artist.wikipedia
                   ? <span className="text-text">{result.artist.wikipedia}</span>

@@ -15,7 +15,7 @@ export async function PATCH(
   const { id } = await params
   const body = await request.json() as Record<string, string | null>
 
-  const allowed = ['spotify_artist_id', 'wikipedia_ja']
+  const allowed = ['wikipedia_ja']
   const update: Record<string, string | null> = {}
   for (const key of allowed) {
     if (key in body) update[key] = body[key] || null

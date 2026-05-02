@@ -34,7 +34,6 @@ async function mbSearch(name: string): Promise<string | null> {
 
 type MBUrls = {
   youtube_channel_id: string | null
-  spotify_id:         string | null
   wikipedia_ja:       string | null
   homepage:           string | null
 }
@@ -44,16 +43,14 @@ async function mbUrls(mbid: string): Promise<MBUrls> {
     `https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels&fmt=json`,
     { headers: { 'User-Agent': MB_UA }, signal: AbortSignal.timeout(8000) }
   )
-  const result: MBUrls = { youtube_channel_id: null, spotify_id: null, wikipedia_ja: null, homepage: null }
+  const result: MBUrls = { youtube_channel_id: null, wikipedia_ja: null, homepage: null }
   if (!res.ok) return result
   const data = await res.json() as {
     relations: Array<{ type: string; url: { resource: string } }>
   }
   for (const rel of (data.relations ?? [])) {
     const href = rel.url?.resource ?? ''
-    if (!result.spotify_id && href.startsWith('https://open.spotify.com/artist/')) {
-      result.spotify_id = href.split('/').at(-1) ?? null
-    } else if (!result.wikipedia_ja && href.startsWith('https://ja.wikipedia.org/wiki/')) {
+    if (!result.wikipedia_ja && href.startsWith('https://ja.wikipedia.org/wiki/')) {
       result.wikipedia_ja = decodeURIComponent(
         href.replace('https://ja.wikipedia.org/wiki/', '')
       ).replace(/_/g, ' ')
@@ -148,36 +145,6 @@ async function resolveChannel(channelInput: string) {
   }
 }
 
-// ─── Spotify 統計取得 ────────────────────────────────────────────────────────
-
-async function resolveSpotify(spotifyId: string): Promise<{ popularity: number; followers: number } | null> {
-  try {
-    const creds = Buffer.from(
-      `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
-    ).toString('base64')
-    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${creds}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=client_credentials',
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!tokenRes.ok) return null
-    const { access_token } = await tokenRes.json() as { access_token: string }
-    const artistRes = await fetch(`https://api.spotify.com/v1/artists/${spotifyId}`, {
-      headers: { Authorization: `Bearer ${access_token}` },
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!artistRes.ok) return null
-    const artist = await artistRes.json() as { popularity: number; followers: { total: number } }
-    return { popularity: artist.popularity, followers: artist.followers.total }
-  } catch {
-    return null
-  }
-}
-
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -199,7 +166,7 @@ export async function POST(request: NextRequest) {
     searchWikipedia(artistName),
   ])
 
-  const urls = mbid ? await mbUrls(mbid) : { youtube_channel_id: null, spotify_id: null, wikipedia_ja: null, homepage: null }
+  const urls = mbid ? await mbUrls(mbid) : { youtube_channel_id: null, wikipedia_ja: null, homepage: null }
 
   // ── YouTube 解決 ──
   let youtubeInput = urls.youtube_channel_id
@@ -237,9 +204,6 @@ export async function POST(request: NextRequest) {
   // ── Wikipedia: MusicBrainz優先、なければ検索結果 ──
   const wikipediaJa = urls.wikipedia_ja ?? wpTitleDirect
 
-  // ── Spotify 統計取得（IDがある場合のみ） ──
-  const spotifyData = urls.spotify_id ? await resolveSpotify(urls.spotify_id) : null
-
   const jstNow = Date.now() + 9 * 60 * 60 * 1000
   const today = new Date(jstNow).toISOString().split('T')[0]
 
@@ -249,7 +213,6 @@ export async function POST(request: NextRequest) {
     .insert({
       name:               artistName,
       youtube_channel_id: channelInfo.channelId,
-      spotify_artist_id:  urls.spotify_id,
       wikipedia_ja:       wikipediaJa,
       current_index:      0,
       initial_index:      0,
@@ -290,10 +253,6 @@ export async function POST(request: NextRequest) {
     index_value:    null,
     snapshot_date:  today,
   }
-  if (spotifyData) {
-    snapRow.spotify_popularity = spotifyData.popularity
-    snapRow.spotify_followers  = spotifyData.followers
-  }
   if (wikipediaViews !== null) {
     snapRow.wikipedia_pageviews = wikipediaViews
   }
@@ -306,7 +265,6 @@ export async function POST(request: NextRequest) {
       name:         artistName,
       channelTitle: channelInfo.channelTitle,
       youtube:      channelInfo.channelId,
-      spotify:      urls.spotify_id,
       wikipedia:    wikipediaJa,
     },
   })
