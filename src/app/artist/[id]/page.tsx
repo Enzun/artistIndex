@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import Image from 'next/image'
 import type { ViewSnapshot, Investment } from '@/lib/types'
 import InvestForm from './InvestForm'
 import InvestmentCard from './InvestmentCard'
@@ -68,7 +69,16 @@ export default async function ArtistPage({
   return (
     <div>
       {/* アーティスト名 + YouTube リンク */}
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-3 mb-1">
+        {artist.thumbnail_url && (
+          <Image
+            src={artist.thumbnail_url}
+            alt={artist.name}
+            width={48}
+            height={48}
+            className="rounded-full flex-shrink-0"
+          />
+        )}
         <h1 className="text-2xl font-bold">{artist.name}</h1>
         <a
           href={`https://www.youtube.com/channel/${artist.youtube_channel_id}`}
@@ -96,7 +106,6 @@ export default async function ArtistPage({
       </div>
 
       <IndexChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
-      <ViewsChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
 
       {user ? (
         <div className="flex flex-col gap-4">
@@ -135,6 +144,8 @@ export default async function ArtistPage({
           description={artist.description}
         />
       </div>
+
+      <ViewsChart snapshots={(snapshots ?? []) as ViewSnapshot[]} />
     </div>
   )
 }

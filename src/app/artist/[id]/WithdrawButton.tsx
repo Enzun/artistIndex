@@ -12,14 +12,28 @@ export default function WithdrawButton({
   totalShares: number
   currentIndex: number
 }) {
-  const [shares, setShares] = useState(totalShares)
+  const [inputVal, setInputVal] = useState(String(totalShares))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
 
+  const parsed = parseInt(inputVal, 10)
+  const shares = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 1), totalShares)
   const returnPts = Math.round(shares * currentIndex)
 
+  function handleBlur() {
+    // フォーカスを外したときだけクランプして表示を整える
+    if (isNaN(parsed) || parsed < 1) {
+      setInputVal('1')
+    } else if (parsed > totalShares) {
+      setInputVal(String(totalShares))
+    } else {
+      setInputVal(String(parsed))
+    }
+  }
+
   async function handleWithdraw() {
+    if (shares < 1) return
     setLoading(true)
     setError('')
     const body = new FormData()
@@ -39,23 +53,21 @@ export default function WithdrawButton({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <div className="flex items-center border border-border rounded-lg overflow-hidden">
-          <button
-            onClick={() => setShares(s => Math.max(1, s - 1))}
-            disabled={loading || shares <= 1}
-            className="px-3 py-1.5 text-sm text-dim hover:text-text disabled:opacity-30 transition-colors"
-          >−</button>
-          <span className="px-2 py-1.5 text-sm tabular-nums min-w-[3rem] text-center">{shares}</span>
-          <button
-            onClick={() => setShares(s => Math.min(totalShares, s + 1))}
-            disabled={loading || shares >= totalShares}
-            className="px-3 py-1.5 text-sm text-dim hover:text-text disabled:opacity-30 transition-colors"
-          >＋</button>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={inputVal}
+            onChange={e => setInputVal(e.target.value.replace(/[^0-9]/g, ''))}
+            onBlur={handleBlur}
+            disabled={loading}
+            className="w-16 px-2 py-1.5 text-sm tabular-nums text-center focus:outline-none bg-transparent"
+          />
         </div>
         <span className="text-xs text-dim">/ {totalShares} 枚</span>
       </div>
       <button
         onClick={handleWithdraw}
-        disabled={loading}
+        disabled={loading || shares < 1}
         className="w-full bg-mga/10 border border-mga/30 text-mga rounded-lg py-2 text-sm font-medium hover:bg-mga/20 transition-colors disabled:opacity-50"
       >
         {loading ? '処理中...' : `回収する（${returnPts.toLocaleString()} pt）`}
