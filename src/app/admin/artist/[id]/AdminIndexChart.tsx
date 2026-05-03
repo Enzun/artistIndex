@@ -9,39 +9,30 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ReferenceLine,
 } from 'recharts'
 import type { TooltipProps } from 'recharts'
+import { calcHIndex, DEFAULT_H_PARAMS, type SnapRow } from '@/lib/indexFormula'
 
-type Snapshot = { snapshot_date: string; index_value: number | null; daily_increase?: number | null }
+type Snapshot = {
+  snapshot_date: string
+  index_value: number | null
+  daily_increase?: number | null
+  total_views?: number | null
+  wikipedia_pageviews?: number | null
+}
 
-const K = 30
-const BASELINE = 14
+type ChartPoint = { date: string; index: number }
 
-type ChartPoint = { date: string; index: number; views: number | null }
-
-// daily_increase だけを使って A2 式をその場で計算（DB書き込みなし）
-// 開始日=100pt で正規化。初日 daily_increase=0 でも起点として使う
-function calcPreview(snapshots: Snapshot[]): ChartPoint[] {
-  const data = snapshots
-    .filter(s => s.daily_increase != null)
-    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
-  if (data.length < 1) return []
-
+function buildHTimeSeries(snapshots: Snapshot[], scale: number | null): ChartPoint[] {
+  const sorted = [...snapshots].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+  const params = scale ? { ...DEFAULT_H_PARAMS, SCALE: scale } : DEFAULT_H_PARAMS
   const result: ChartPoint[] = []
-  let idx = 100
-  result.push({ date: data[0].snapshot_date, index: 100, views: data[0].daily_increase ?? null })
 
-  for (let i = 1; i < data.length; i++) {
-    const d = data[i].daily_increase ?? 0
-    if (d > 0) {
-      const hist = data.slice(Math.max(0, i - BASELINE), i).filter(r => (r.daily_increase ?? 0) > 0)
-      if (hist.length > 0) {
-        const B = hist.reduce((s, r) => s + (r.daily_increase ?? 0), 0) / hist.length
-        idx = Math.max(0, idx * (1 + (K / 365) * (d / B - 1)))
-      }
+  for (let i = 0; i < sorted.length; i++) {
+    const val = calcHIndex(sorted.slice(0, i + 1) as SnapRow[], params)
+    if (val !== null) {
+      result.push({ date: sorted[i].snapshot_date, index: Math.round(val * 100) / 100 })
     }
-    result.push({ date: data[i].snapshot_date, index: Math.round(idx * 100) / 100, views: data[i].daily_increase ?? null })
   }
   return result
 }
@@ -70,7 +61,7 @@ function CustomTooltip({ active, payload }: TooltipProps<number, string> & { pay
   return (
     <div className="bg-white border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
       <p className="text-dim mb-1">{formatDate(date)}</p>
-      <p className="text-text font-bold tabular-nums text-sm">{index.toFixed(1)} pt</p>
+      <p className="text-text font-bold tabular-nums text-sm">{index.toLocaleString(undefined, { maximumFractionDigits: 1 })} pt</p>
     </div>
   )
 }
@@ -81,25 +72,16 @@ function CustomDot(props: { cx?: number; cy?: number; index?: number; dataLength
   return <circle cx={cx} cy={cy} r={4} fill="#2563eb" stroke="#ffffff" strokeWidth={2} />
 }
 
-// 取得開始日=100ptに正規化したA2指数プレビュー
-// index_value がない場合は daily_increase から A2 式でその場計算
-export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }) {
+export default function AdminIndexChart({
+  snapshots,
+  scale = null,
+}: {
+  snapshots: Snapshot[]
+  scale?: number | null
+}) {
   const [period, setPeriod] = useState<typeof PERIODS[number]['label']>('ALL')
 
-  const withValue = snapshots.filter(s => s.index_value !== null && s.index_value > 0)
-  const useCalc = withValue.length === 0  // index_value が全 NULL or 0 → daily_increase から計算
-
-  // index_value あり: 先頭=100pt に正規化
-  // index_value なし: A2 式でその場計算
-  const firstVal = withValue[0]?.index_value ?? null
-  const viewsMap = new Map(snapshots.map(s => [s.snapshot_date, s.daily_increase ?? null]))
-  const allData: ChartPoint[] = useCalc
-    ? calcPreview(snapshots)
-    : withValue.map(s => ({
-        date: s.snapshot_date,
-        index: firstVal ? (s.index_value! / firstVal) * 100 : s.index_value!,
-        views: viewsMap.get(s.snapshot_date) ?? null,
-      }))
+  const allData = buildHTimeSeries(snapshots, scale)
 
   const selectedDays = PERIODS.find(p => p.label === period)?.days ?? Infinity
   const cutoff = selectedDays === Infinity
@@ -111,10 +93,14 @@ export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }
   if (allData.length < 2) {
     return (
       <div className="bg-surface border border-border rounded-xl p-4 mb-4 h-36 flex items-center justify-center">
-        <p className="text-dim text-xs">データ蓄積中 ({withValue.length}件)</p>
+        <p className="text-dim text-xs">データ蓄積中 ({snapshots.length}件)</p>
       </div>
     )
   }
+
+  const availableDays = Math.ceil(
+    (new Date(allData.at(-1)!.date).getTime() - new Date(allData[0].date).getTime()) / 86400_000
+  )
 
   const values = data.map(d => d.index)
   const minVal = Math.min(...values)
@@ -129,20 +115,14 @@ export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }
     data[Math.min(i * step, data.length - 1)].date,
   )
 
-  const availableDays = allData.length > 0
-    ? Math.ceil((new Date(allData.at(-1)!.date).getTime() - new Date(allData[0].date).getTime()) / 86400_000)
-    : 0
-
-  const latest = data.at(-1)?.index ?? 100
-  const latestChange = latest - 100
-  const latestChangePct = latestChange
+  const latest = data.at(-1)!.index
+  const first = data[0].index
+  const changePct = first > 0 ? ((latest - first) / first) * 100 : 0
 
   return (
     <div className="bg-surface border border-border rounded-xl p-4 mb-4">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs text-dim">
-          {useCalc ? '指数プレビュー（再生数から計算・取得開始日=100pt）' : '指数推移（プレビュー・取得開始日=100pt）'}
-        </p>
+        <p className="text-xs text-dim">H式指数推移</p>
         <div className="flex gap-1">
           {PERIODS.map(({ label, days }) => {
             const available = days === Infinity || availableDays >= days * 0.8
@@ -164,8 +144,9 @@ export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }
           })}
         </div>
       </div>
-      <p className={`text-xs mb-3 tabular-nums ${latestChange >= 0 ? 'text-mga' : 'text-accent'}`}>
-        現在: {latest.toFixed(1)} pt ({latestChange >= 0 ? '+' : ''}{latestChangePct.toFixed(1)}%)
+      <p className={`text-xs mb-3 tabular-nums ${changePct >= 0 ? 'text-mga' : 'text-accent'}`}>
+        現在: {latest.toLocaleString(undefined, { maximumFractionDigits: 1 })} pt
+        {' '}({changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}% 期間内)
       </p>
       <ResponsiveContainer width="100%" height={160}>
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -185,7 +166,6 @@ export default function AdminIndexChart({ snapshots }: { snapshots: Snapshot[] }
             tickLine={false}
             width={40}
           />
-          <ReferenceLine y={100} stroke="#e2e4e8" strokeDasharray="4 2" />
           <Tooltip
             content={<CustomTooltip />}
             cursor={{ stroke: '#e2e4e8', strokeWidth: 1 }}

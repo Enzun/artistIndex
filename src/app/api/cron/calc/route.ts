@@ -1,18 +1,16 @@
 /**
  * GET /api/cron/calc
- * active アーティストの指数を計算して artists.current_index と
- * view_snapshots.index_value を更新する。
- * fetch の完了後に実行すること。
+ * active アーティストの H 式指数を計算して
+ * artists.current_index と view_snapshots.index_value を更新する。
+ * fetch の完了後（JST 00:03）に実行すること。
  */
 
 import { NextResponse } from 'next/server'
 import { verifyCronAuth, getServiceClient } from '../_lib/auth'
 import { CronLogger } from '../_lib/logger'
+import { calcHIndex, DEFAULT_H_PARAMS, type SnapRow } from '@/lib/indexFormula'
 
 export const dynamic = 'force-dynamic'
-
-const K             = 30
-const BASELINE_DAYS = 14
 
 export async function GET(request: Request) {
   if (!verifyCronAuth(request)) {
@@ -24,63 +22,81 @@ export async function GET(request: Request) {
   await logger.start()
 
   const jstNow = Date.now() + 9 * 60 * 60 * 1000
-  const today = new Date(jstNow).toISOString().split('T')[0] // JST
-  const baselineFrom = new Date(jstNow - BASELINE_DAYS * 86400_000)
-    .toISOString().split('T')[0]
+  const today = new Date(jstNow).toISOString().split('T')[0]
 
-  const summary: Record<string, unknown> = { date: today, ok: 0, skipped: 0, error: 0, errors: [] as string[] }
+  const summary: Record<string, unknown> = {
+    date: today, ok: 0, skipped: 0, error: 0, errors: [] as string[],
+  }
 
   try {
-    const { data: artists, error } = await sb
+    // ── active アーティスト一覧（index_scale含む） ──
+    const { data: artists, error: artistErr } = await sb
       .from('artists')
-      .select('id, name, current_index')
+      .select('id, name, index_scale')
       .eq('status', 'active')
-    if (error) throw error
+    if (artistErr) throw artistErr
 
-    for (const artist of artists ?? []) {
-      try {
-        const { data: todaySnap } = await sb
-          .from('view_snapshots')
-          .select('daily_increase')
-          .eq('artist_id', artist.id)
-          .eq('snapshot_date', today)
-          .maybeSingle()
+    const list = artists ?? []
+    if (!list.length) {
+      await logger.finish('success', summary)
+      return NextResponse.json(summary)
+    }
 
-        if (!todaySnap || Number(todaySnap.daily_increase) <= 0) {
-          summary.skipped = (summary.skipped as number) + 1
-          continue
-        }
+    const artistIds = list.map(a => a.id)
 
-        const d = Number(todaySnap.daily_increase)
+    // ── 全スナップショット一括取得（昇順） ──
+    const { data: allSnaps, error: snapErr } = await sb
+      .from('view_snapshots')
+      .select('artist_id, snapshot_date, total_views, daily_increase, wikipedia_pageviews')
+      .in('artist_id', artistIds)
+      .order('artist_id')
+      .order('snapshot_date', { ascending: true })
+      .limit(50000)
+    if (snapErr) throw snapErr
 
-        const { data: history } = await sb
-          .from('view_snapshots')
-          .select('daily_increase')
-          .eq('artist_id', artist.id)
-          .gte('snapshot_date', baselineFrom)
-          .lt('snapshot_date', today)
-          .gt('daily_increase', 0)
+    // アーティストごとにグループ化
+    const snapsByArtist = new Map<string, SnapRow[]>()
+    for (const snap of allSnaps ?? []) {
+      if (!snapsByArtist.has(snap.artist_id)) snapsByArtist.set(snap.artist_id, [])
+      snapsByArtist.get(snap.artist_id)!.push(snap as SnapRow)
+    }
 
-        if (!history?.length) {
-          summary.skipped = (summary.skipped as number) + 1
-          continue
-        }
+    // ── H 式計算 ──
+    type ArtistUpdate   = { id: string; current_index: number }
+    type SnapshotUpdate = { artist_id: string; snapshot_date: string; index_value: number }
+    const artistUpdates:   ArtistUpdate[]   = []
+    const snapshotUpdates: SnapshotUpdate[] = []
 
-        const B = history.reduce((s, r) => s + Number(r.daily_increase), 0) / history.length
-        const newIndex = Math.max(0, Number(artist.current_index) * (1 + (K / 365) * (d / B - 1)))
-        const rounded  = Math.round(newIndex * 100) / 100
+    for (const artist of list) {
+      const snaps = snapsByArtist.get(artist.id) ?? []
+      if (!snaps.length) { summary.skipped = (summary.skipped as number) + 1; continue }
 
-        await sb.from('artists').update({ current_index: rounded }).eq('id', artist.id)
-        await sb.from('view_snapshots')
-          .update({ index_value: rounded })
-          .eq('artist_id', artist.id)
-          .eq('snapshot_date', today)
+      const params = artist.index_scale
+        ? { ...DEFAULT_H_PARAMS, SCALE: artist.index_scale }
+        : DEFAULT_H_PARAMS
 
-        summary.ok = (summary.ok as number) + 1
-      } catch (err) {
-        ;(summary.errors as string[]).push(`${artist.name}: ${err}`)
-        summary.error = (summary.error as number) + 1
-      }
+      const newIndex = calcHIndex(snaps, params)
+      if (newIndex === null) { summary.skipped = (summary.skipped as number) + 1; continue }
+
+      const rounded = Math.round(newIndex * 100) / 100
+      artistUpdates.push({ id: artist.id, current_index: rounded })
+      snapshotUpdates.push({ artist_id: artist.id, snapshot_date: today, index_value: rounded })
+      summary.ok = (summary.ok as number) + 1
+    }
+
+    // ── バッチ更新 ──
+    if (artistUpdates.length > 0) {
+      const { error: e } = await sb
+        .from('artists')
+        .upsert(artistUpdates, { onConflict: 'id' })
+      if (e) (summary.errors as string[]).push(`artists upsert: ${e.message}`)
+    }
+
+    if (snapshotUpdates.length > 0) {
+      const { error: e } = await sb
+        .from('view_snapshots')
+        .upsert(snapshotUpdates, { onConflict: 'artist_id,snapshot_date' })
+      if (e) (summary.errors as string[]).push(`snapshots upsert: ${e.message}`)
     }
 
     await logger.finish('success', summary)

@@ -6,6 +6,7 @@ import type { ViewSnapshot } from '@/lib/types'
 import AdminIndexChart from './AdminIndexChart'
 import ViewsChart from '@/app/artist/[id]/ViewsChart'
 import ActivateButton from './ActivateButton'
+import { calcHIndex, DEFAULT_H_PARAMS, type SnapRow } from '@/lib/indexFormula'
 
 export default async function AdminArtistPage({
   params,
@@ -25,7 +26,7 @@ export default async function AdminArtistPage({
 
   const { data: snapshots } = await supabase
     .from('view_snapshots')
-    .select('snapshot_date, index_value, daily_increase, total_views')
+    .select('snapshot_date, index_value, daily_increase, total_views, wikipedia_pageviews')
     .eq('artist_id', id)
     .order('snapshot_date', { ascending: true })
 
@@ -36,8 +37,18 @@ export default async function AdminArtistPage({
   const firstSnap = snaps[0]?.snapshot_date ?? null
   const lastSnap = snaps.at(-1)?.snapshot_date ?? null
   const latestTotalViews = snaps.findLast(s => s.total_views)?.total_views ?? 0
-  const previewInitialIndex = latestTotalViews
-    ? (Math.sqrt(latestTotalViews / 1_000_000) * 10).toFixed(1)
+
+  // H 式指数（最新値）
+  const hParams = artist.index_scale
+    ? { ...DEFAULT_H_PARAMS, SCALE: artist.index_scale }
+    : DEFAULT_H_PARAMS
+  const hIndex = calcHIndex(snaps as SnapRow[], hParams)
+
+  // collecting: index_scale が保存済みならそれを使用
+  const previewInitialIndex = artist.index_scale
+    ? Math.floor(artist.index_scale).toLocaleString()
+    : latestTotalViews
+    ? Math.floor(Math.sqrt(latestTotalViews) * 10).toLocaleString()
     : null
 
   return (
@@ -126,27 +137,31 @@ export default async function AdminArtistPage({
         </div>
         {artist.status === 'active' ? (
           <div className="bg-surface border border-border rounded-xl p-4">
-            <p className="text-xs text-dim mb-1">現在の指数</p>
-            <p className="text-sm font-bold tabular-nums text-mga">{Math.floor(artist.current_index).toLocaleString()} pt</p>
+            <p className="text-xs text-dim mb-1">H式指数（現在）</p>
+            <p className="text-sm font-bold tabular-nums text-mga">
+              {hIndex !== null ? `${Math.floor(hIndex).toLocaleString()} pt` : '—'}
+            </p>
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-xl p-4">
-            <p className="text-xs text-dim mb-1">公開時の予測初期値</p>
+            <p className="text-xs text-dim mb-1">公開時の初期値（SCALE）</p>
             <p className="text-sm font-semibold tabular-nums">
-              {previewInitialIndex ? `${parseFloat(previewInitialIndex).toLocaleString()} pt` : '—'}
+              {previewInitialIndex ? `${previewInitialIndex} pt` : '—'}
             </p>
           </div>
         )}
         {artist.status === 'active' && (
           <div className="bg-surface border border-border rounded-xl p-4">
-            <p className="text-xs text-dim mb-1">初期指数</p>
-            <p className="text-sm font-semibold tabular-nums">{Math.floor(artist.initial_index).toLocaleString()} pt</p>
+            <p className="text-xs text-dim mb-1">SCALE（初期指数）</p>
+            <p className="text-sm font-semibold tabular-nums">
+              {artist.index_scale ? Math.floor(artist.index_scale).toLocaleString() : Math.floor(artist.initial_index).toLocaleString()} pt
+            </p>
           </div>
         )}
       </div>
 
       {/* グラフ */}
-      <AdminIndexChart snapshots={snaps} />
+      <AdminIndexChart snapshots={snaps} scale={artist.index_scale ?? null} />
       <ViewsChart snapshots={snaps} />
 
       {/* アイコン + 説明文 */}
