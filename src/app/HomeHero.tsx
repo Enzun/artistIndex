@@ -251,6 +251,11 @@ export default function HomeHero({
                     <span className={`text-xs font-medium tabular-nums ${rising ? 'text-green-500' : 'text-red-400'}`}>
                       {rising ? '▲' : '▼'}
                       {changePct !== null ? ` ${Math.abs(changePct).toFixed(2)}%` : ' —'}
+                      {prev !== undefined && (
+                        <span className="ml-1">
+                          ({rising ? '+' : ''}{Math.floor(latest - prev).toLocaleString()} pt)
+                        </span>
+                      )}
                     </span>
                     <span className="text-xs text-dim">前日比</span>
                   </div>
@@ -315,13 +320,8 @@ export default function HomeHero({
                       </span>
                     )}
                     {rankType !== 'index' && (
-                      <span className={`text-xs tabular-nums text-right ${score >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                      <span className={`text-xs tabular-nums ${score >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                         {rankLabel(score, rankType)}
-                        {rankType === 'daily' && p !== undefined && (
-                          <span className="text-dim ml-1">
-                            ({(score >= 0 ? '+' : '') + Math.floor(val - p).toLocaleString()} pt)
-                          </span>
-                        )}
                       </span>
                     )}
                     <span className="text-sm font-bold tabular-nums w-20 text-right">
