@@ -26,7 +26,7 @@ export default async function AdminArtistPage({
 
   const { data: snapshots } = await supabase
     .from('view_snapshots')
-    .select('snapshot_date, index_value, daily_increase, total_views, wikipedia_pageviews')
+    .select('id, artist_id, snapshot_date, index_value, daily_increase, total_views, wikipedia_pageviews')
     .eq('artist_id', id)
     .order('snapshot_date', { ascending: true })
 
