@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   }
 
   // H 式で時系列を再計算
-  type SnapUpdate    = { artist_id: string; snapshot_date: string; index_value: number }
+  type SnapUpdate    = { artist_id: string; snapshot_date: string; index_value: number; total_views: number; daily_increase: number }
   type ArtistUpdate  = { id: string; current_index: number }
   const snapUpdates:   SnapUpdate[]   = []
   const artistUpdates: ArtistUpdate[] = []
@@ -63,9 +63,11 @@ export async function POST(request: NextRequest) {
       const val = calcHIndex(snaps.slice(0, i + 1), params)
       if (val !== null) {
         snapUpdates.push({
-          artist_id:     artistId,
-          snapshot_date: snaps[i].snapshot_date,
-          index_value:   Math.round(val * 100) / 100,
+          artist_id:      artistId,
+          snapshot_date:  snaps[i].snapshot_date,
+          index_value:    Math.round(val * 100) / 100,
+          total_views:    snaps[i].total_views,
+          daily_increase: snaps[i].daily_increase,
         })
         lastVal = val
       }
