@@ -93,7 +93,7 @@ function rollYt(snaps: SnapWithRate[], i: number, win: number): number {
 export function calcHIndex(
   snaps: SnapRow[],
   params: HParams = DEFAULT_H_PARAMS,
-  minDays = 14,
+  minDays = 1,
 ): number | null {
   if (snaps.length < minDays) return null
 

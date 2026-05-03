@@ -12,6 +12,7 @@ type Artist = {
   wikipedia_ja: string | null
   created_at: string
   thumbnail_url: string | null
+  index_scale: number | null
 }
 
 type SnapshotStat = {
@@ -42,7 +43,7 @@ export default async function AdminPage() {
   ] = await Promise.all([
     supabase
       .from('artists')
-      .select('id, name, status, current_index, youtube_channel_id, wikipedia_ja, created_at, thumbnail_url')
+      .select('id, name, status, current_index, youtube_channel_id, wikipedia_ja, created_at, thumbnail_url, index_scale')
       .order('status')
       .order('name'),
     // 最新スナップ（wikipedia_null チェック用）
@@ -98,9 +99,16 @@ export default async function AdminPage() {
     if (!snapsByArtist.has(row.artist_id)) snapsByArtist.set(row.artist_id, [])
     snapsByArtist.get(row.artist_id)!.push(row as SnapRow)
   }
+  const artistScaleMap = new Map<string, number>()
+  for (const a of artistList) {
+    if (a.index_scale) artistScaleMap.set(a.id, a.index_scale)
+  }
+
   const hIndexMap: Record<string, number | null> = {}
   for (const [artistId, snaps] of snapsByArtist) {
-    hIndexMap[artistId] = calcHIndex(snaps, DEFAULT_H_PARAMS)
+    const scale = artistScaleMap.get(artistId)
+    const params = scale ? { ...DEFAULT_H_PARAMS, SCALE: scale } : DEFAULT_H_PARAMS
+    hIndexMap[artistId] = calcHIndex(snaps, params)
   }
 
   const artistList = (artists ?? []) as Artist[]

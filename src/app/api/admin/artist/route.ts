@@ -208,6 +208,8 @@ export async function POST(request: NextRequest) {
   const today = new Date(jstNow).toISOString().split('T')[0]
 
   // ── DB登録 ──
+  const indexScale = Math.round(Math.sqrt(channelInfo.totalViews) * 10)
+
   const { data: artist, error: insertErr } = await sb
     .from('artists')
     .insert({
@@ -216,6 +218,7 @@ export async function POST(request: NextRequest) {
       wikipedia_ja:       wikipediaJa,
       current_index:      0,
       initial_index:      0,
+      index_scale:        indexScale,
       status:             'collecting',
       published_at:       null,
       thumbnail_url:      channelInfo.thumbnailUrl,
