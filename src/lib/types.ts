@@ -16,6 +16,7 @@ export type ViewSnapshot = {
   daily_increase: number
   index_value: number | null
   snapshot_date: string
+  wikipedia_pageviews?: number | null
 }
 
 export type Investment = {
