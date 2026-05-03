@@ -38,7 +38,6 @@ export default async function AdminPage() {
     { data: artists },
     { data: latestSnaps },
     { data: ytIncrSnaps },
-    { data: allSnaps },
     { data: cronLogs },
   ] = await Promise.all([
     supabase
@@ -58,19 +57,32 @@ export default async function AdminPage() {
       .select('artist_id, snapshot_date')
       .gt('daily_increase', 0)
       .order('snapshot_date', { ascending: false }),
-    // H式計算用: 全スナップ（昇順）
-    supabase
-      .from('view_snapshots')
-      .select('artist_id, snapshot_date, total_views, daily_increase, wikipedia_pageviews')
-      .order('artist_id')
-      .order('snapshot_date', { ascending: true })
-      .limit(20000),
     supabase
       .from('cron_logs')
       .select('id, job, status, summary, created_at, finished_at')
       .order('created_at', { ascending: false })
       .limit(30),
   ])
+
+  // H式計算用: ページネーションで全スナップ取得
+  type RawSnap = SnapRow & { artist_id: string }
+  const PAGE_SIZE = 1000
+  const allSnaps: RawSnap[] = []
+  {
+    let offset = 0
+    while (true) {
+      const { data } = await supabase
+        .from('view_snapshots')
+        .select('artist_id, snapshot_date, total_views, daily_increase, wikipedia_pageviews')
+        .order('artist_id')
+        .order('snapshot_date', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1)
+      if (!data?.length) break
+      allSnaps.push(...(data as RawSnap[]))
+      if (data.length < PAGE_SIZE) break
+      offset += PAGE_SIZE
+    }
+  }
 
   // スナップショット統計をアーティストIDでまとめる
   const statsMap = new Map<string, SnapshotStat>()
@@ -95,9 +107,9 @@ export default async function AdminPage() {
 
   // H式指数をアーティストごとに計算
   const snapsByArtist = new Map<string, SnapRow[]>()
-  for (const row of (allSnaps ?? [])) {
+  for (const row of allSnaps) {
     if (!snapsByArtist.has(row.artist_id)) snapsByArtist.set(row.artist_id, [])
-    snapsByArtist.get(row.artist_id)!.push(row as SnapRow)
+    snapsByArtist.get(row.artist_id)!.push(row)
   }
   const artistList = (artists ?? []) as Artist[]
   const logList = (cronLogs ?? []) as CronLog[]
