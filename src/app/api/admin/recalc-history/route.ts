@@ -89,11 +89,12 @@ export async function POST(request: NextRequest) {
     snapDone += Math.min(CHUNK, snapUpdates.length - i)
   }
 
-  if (artistUpdates.length > 0) {
+  for (const { id, current_index } of artistUpdates) {
     const { error } = await sb
       .from('artists')
-      .upsert(artistUpdates, { onConflict: 'id' })
-    if (error) return NextResponse.json({ error: `artist upsert: ${error.message}` }, { status: 500 })
+      .update({ current_index })
+      .eq('id', id)
+    if (error) return NextResponse.json({ error: `artist update (${id}): ${error.message}` }, { status: 500 })
   }
 
   return NextResponse.json({

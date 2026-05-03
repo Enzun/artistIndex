@@ -97,9 +97,10 @@ export default function HomeHero({
     <div>
       {/* ── ヒーローセクション ── */}
       <div className="mb-8">
+        <h2 className="text-sm font-semibold mb-4">ランキング</h2>
 
-        {/* アイコン行 */}
-        <div className="flex gap-3 overflow-x-auto pb-3 mb-4 scrollbar-hide">
+        {/* アイコン行 — py-3 で scale-110 のクリップを防ぐ */}
+        <div className="flex gap-4 overflow-x-auto py-3 mb-4 scrollbar-hide justify-center">
           {heroArtists.map((artist) => {
             const isSelected = artist.id === selectedId
             return (
