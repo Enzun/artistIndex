@@ -44,21 +44,31 @@ export async function GET(request: Request) {
 
     const artistIds = list.map(a => a.id)
 
-    // ── 全スナップショット一括取得（昇順） ──
-    const { data: allSnaps, error: snapErr } = await sb
-      .from('view_snapshots')
-      .select('artist_id, snapshot_date, total_views, daily_increase, wikipedia_pageviews')
-      .in('artist_id', artistIds)
-      .order('artist_id')
-      .order('snapshot_date', { ascending: true })
-      .limit(50000)
-    if (snapErr) throw snapErr
+    // ── 全スナップショットをページネーションで取得 ──
+    type RawSnap = SnapRow & { artist_id: string }
+    const PAGE_SIZE = 1000
+    const allSnaps: RawSnap[] = []
+    let offset = 0
+    while (true) {
+      const { data, error: snapErr } = await sb
+        .from('view_snapshots')
+        .select('artist_id, snapshot_date, total_views, daily_increase, wikipedia_pageviews')
+        .in('artist_id', artistIds)
+        .order('artist_id')
+        .order('snapshot_date', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1)
+      if (snapErr) throw snapErr
+      if (!data?.length) break
+      allSnaps.push(...(data as RawSnap[]))
+      if (data.length < PAGE_SIZE) break
+      offset += PAGE_SIZE
+    }
 
     // アーティストごとにグループ化
     const snapsByArtist = new Map<string, SnapRow[]>()
-    for (const snap of allSnaps ?? []) {
+    for (const snap of allSnaps) {
       if (!snapsByArtist.has(snap.artist_id)) snapsByArtist.set(snap.artist_id, [])
-      snapsByArtist.get(snap.artist_id)!.push(snap as SnapRow)
+      snapsByArtist.get(snap.artist_id)!.push(snap)
     }
 
     // ── H 式計算 ──

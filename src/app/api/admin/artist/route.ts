@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
   const today = new Date(jstNow).toISOString().split('T')[0]
 
   // ── DB登録 ──
-  const indexScale = Math.round(Math.sqrt(channelInfo.totalViews) * 10)
+  const indexScale = Math.round(0.0526 * Math.pow(channelInfo.totalViews, 0.468))
 
   const { data: artist, error: insertErr } = await sb
     .from('artists')
