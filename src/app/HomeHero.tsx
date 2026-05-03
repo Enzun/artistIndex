@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -11,7 +11,45 @@ type Artist = {
   current_index: number
 }
 
-const HERO_COUNT = 12  // アイコン行に並べる人数
+type RankType = 'index' | 'daily' | 'monthly'
+type Phase = 'visible' | 'exit' | 'enter'
+
+const HERO_COUNT = 5
+
+const RANK_TABS: { key: RankType; label: string }[] = [
+  { key: 'index',   label: '指数値' },
+  { key: 'daily',   label: '前日比' },
+  { key: 'monthly', label: '1ヶ月' },
+]
+
+function getScore(artist: Artist, hist: number[], type: RankType): number {
+  if (type === 'index') return artist.current_index
+  const last  = hist.at(-1) ?? artist.current_index
+  if (type === 'daily') {
+    const prev = hist.at(-2)
+    return prev && prev > 0 ? (last - prev) / prev * 100 : 0
+  }
+  // monthly
+  const first = hist[0]
+  return first && first > 0 ? (last - first) / first * 100 : 0
+}
+
+function rankLabel(score: number, type: RankType): string {
+  if (type === 'index') return Math.floor(score).toLocaleString() + ' pt'
+  return (score >= 0 ? '+' : '') + score.toFixed(2) + '%'
+}
+
+function getTopArtists(
+  artists: Artist[],
+  histories: Record<string, number[]>,
+  type: RankType,
+): Artist[] {
+  return [...artists]
+    .sort((a, b) => getScore(b, histories[b.id] ?? [], type) - getScore(a, histories[a.id] ?? [], type))
+    .slice(0, HERO_COUNT)
+}
+
+// ── Sparkline ──────────────────────────────────────────────────────────────
 
 function Sparkline({ values, rising }: { values: number[]; rising: boolean }) {
   if (values.length < 2) return null
@@ -24,14 +62,9 @@ function Sparkline({ values, rising }: { values: number[]; rising: boolean }) {
     .join(' ')
   return (
     <svg width={w} height={h} className="overflow-visible w-full" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <polyline
-        points={pts}
-        fill="none"
+      <polyline points={pts} fill="none"
         stroke={rising ? '#22c55e' : '#ef4444'}
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+        strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   )
 }
@@ -42,22 +75,20 @@ function MiniSparkline({ values }: { values: number[] }) {
   const max = Math.max(...values)
   const range = max - min || 1
   const w = 64, h = 24
-  const rising = values.at(-1)! >= values[0]
+  const rising = (values.at(-1) ?? 0) >= (values[0] ?? 0)
   const pts = values
     .map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`)
     .join(' ')
   return (
     <svg width={w} height={h} className="overflow-visible flex-shrink-0">
-      <polyline
-        points={pts}
-        fill="none"
+      <polyline points={pts} fill="none"
         stroke={rising ? '#22c55e' : '#ef4444'}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
+        strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   )
 }
+
+// ── Main Component ──────────────────────────────────────────────────────────
 
 export default function HomeHero({
   artists,
@@ -66,69 +97,133 @@ export default function HomeHero({
   artists: Artist[]
   histories: Record<string, number[]>
 }) {
-  const heroArtists = artists.slice(0, HERO_COUNT)
-  const [selectedId, setSelectedId] = useState(heroArtists[0]?.id ?? null)
-  const [fading, setFading] = useState(false)
-  const [query, setQuery] = useState('')
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [rankType, setRankType]   = useState<RankType>('index')
+  const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, 'index'))
+  const [selectedId, setSelectedId] = useState<string | null>(heroList[0]?.id ?? null)
+  const [phase, setPhase]         = useState<Phase>('visible')
+  const [query, setQuery]         = useState('')
+  const transitioning = useRef(false)
+
+  // ランキング切り替え（スライドアニメーション付き）
+  const changeRank = useCallback((newType: RankType) => {
+    if (newType === rankType || transitioning.current) return
+    transitioning.current = true
+
+    setPhase('exit')
+    setTimeout(() => {
+      const newList = getTopArtists(artists, histories, newType)
+      setRankType(newType)
+      setHeroList(newList)
+      setSelectedId(newList[0]?.id ?? null)
+      setPhase('enter')
+      // enter → visible: 次フレームで transition を開始
+      setTimeout(() => {
+        setPhase('visible')
+        transitioning.current = false
+      }, 30)
+    }, 220)
+  }, [rankType, artists, histories])
+
+  // パネル内アーティスト切り替え（フェード）
+  const [panelFading, setPanelFading] = useState(false)
+  const panelTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function selectArtist(id: string) {
-    if (id === selectedId || fading) return
-    setFading(true)
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
+    if (id === selectedId || panelFading) return
+    setPanelFading(true)
+    if (panelTimer.current) clearTimeout(panelTimer.current)
+    panelTimer.current = setTimeout(() => {
       setSelectedId(id)
-      setFading(false)
+      setPanelFading(false)
     }, 160)
   }
 
-  const selected = artists.find(a => a.id === selectedId) ?? heroArtists[0]
+  // 選択中アーティスト情報
+  const selected = artists.find(a => a.id === selectedId) ?? heroList[0]
   const hist = selected ? (histories[selected.id] ?? []) : []
-  const latest = hist.at(-1) ?? selected?.current_index ?? 0
-  const prev = hist.at(-2)
-  const rising = prev === undefined || latest >= prev
+  const latest  = hist.at(-1) ?? selected?.current_index ?? 0
+  const prev    = hist.at(-2)
+  const rising  = prev === undefined || latest >= prev
   const changePct = prev ? ((latest - prev) / prev) * 100 : null
 
+  // アイコン行 CSS
+  const iconRowClass = [
+    'flex gap-5 justify-center py-3 mb-4',
+    'transition-all duration-220',
+    phase === 'exit'    ? 'opacity-0 -translate-x-8 pointer-events-none' : '',
+    phase === 'enter'   ? 'opacity-0  translate-x-8' : '',
+    phase === 'visible' ? 'opacity-100 translate-x-0' : '',
+  ].join(' ')
+
+  // 検索 + ランキングソート
+  const sortedAll = [...artists].sort(
+    (a, b) => getScore(b, histories[b.id] ?? [], rankType) - getScore(a, histories[a.id] ?? [], rankType)
+  )
   const filtered = query.trim()
-    ? artists.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
-    : artists
+    ? sortedAll.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
+    : sortedAll
 
   return (
     <div>
       {/* ── ヒーローセクション ── */}
       <div className="mb-8">
-        <h2 className="text-sm font-semibold mb-4">ランキング</h2>
 
-        {/* アイコン行 — py-3 で scale-110 のクリップを防ぐ */}
-        <div className="flex gap-4 overflow-x-auto py-3 mb-4 scrollbar-hide justify-center">
-          {heroArtists.map((artist) => {
+        {/* ランキングタイトル + タブ */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold">ランキング</h2>
+          <div className="flex gap-1 bg-surface border border-border rounded-lg p-0.5">
+            {RANK_TABS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => changeRank(key)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+                  rankType === key
+                    ? 'bg-text text-bg shadow-sm'
+                    : 'text-dim hover:text-text'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* アイコン行 */}
+        <div className={iconRowClass}>
+          {heroList.map((artist, rank) => {
             const isSelected = artist.id === selectedId
+            const score = getScore(artist, histories[artist.id] ?? [], rankType)
             return (
               <button
                 key={artist.id}
                 onClick={() => selectArtist(artist.id)}
-                className={`flex-shrink-0 transition-all duration-200 outline-none group ${
-                  isSelected ? 'scale-110' : 'opacity-50 hover:opacity-80 hover:scale-105'
-                }`}
+                className="flex flex-col items-center gap-1.5 outline-none group"
                 title={artist.name}
               >
-                <div className={`rounded-full transition-all duration-200 ${
+                <div className={`transition-all duration-200 rounded-full ${
                   isSelected
-                    ? 'ring-2 ring-offset-2 ring-mga'
-                    : ''
+                    ? 'ring-2 ring-offset-2 ring-mga scale-110'
+                    : 'opacity-55 group-hover:opacity-90 group-hover:scale-105'
                 }`}>
                   {artist.thumbnail_url ? (
                     <Image
                       src={artist.thumbnail_url}
                       alt={artist.name}
-                      width={52}
-                      height={52}
-                      className="rounded-full w-13 h-13 object-cover"
+                      width={56}
+                      height={56}
+                      className="rounded-full object-cover"
                     />
                   ) : (
-                    <div className="w-13 h-13 rounded-full bg-border" />
+                    <div className="w-14 h-14 rounded-full bg-border" />
                   )}
                 </div>
+                <span className={`text-xs tabular-nums transition-colors ${
+                  isSelected ? 'text-text font-medium' : 'text-dim'
+                }`}>
+                  {rankType === 'index'
+                    ? `#${rank + 1}`
+                    : (score >= 0 ? '+' : '') + score.toFixed(1) + '%'}
+                </span>
               </button>
             )
           })}
@@ -136,22 +231,14 @@ export default function HomeHero({
 
         {/* パネル */}
         {selected && (
-          <div
-            className={`bg-surface border border-border rounded-2xl p-5 transition-all duration-200 ${
-              fading ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
-            }`}
-          >
+          <div className={`bg-surface border border-border rounded-2xl p-5 transition-all duration-160 ${
+            panelFading ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
+          }`}>
             <div className="flex items-start gap-4">
-              {/* 左: アイコン + テキスト */}
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 {selected.thumbnail_url ? (
-                  <Image
-                    src={selected.thumbnail_url}
-                    alt={selected.name}
-                    width={64}
-                    height={64}
-                    className="rounded-full flex-shrink-0"
-                  />
+                  <Image src={selected.thumbnail_url} alt={selected.name}
+                    width={64} height={64} className="rounded-full flex-shrink-0" />
                 ) : (
                   <div className="w-16 h-16 rounded-full bg-border flex-shrink-0" />
                 )}
@@ -163,16 +250,12 @@ export default function HomeHero({
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className={`text-xs font-medium tabular-nums ${rising ? 'text-green-500' : 'text-red-400'}`}>
                       {rising ? '▲' : '▼'}
-                      {changePct !== null
-                        ? ` ${Math.abs(changePct).toFixed(2)}%`
-                        : ' —'}
+                      {changePct !== null ? ` ${Math.abs(changePct).toFixed(2)}%` : ' —'}
                     </span>
                     <span className="text-xs text-dim">前日比</span>
                   </div>
                 </div>
               </div>
-
-              {/* 右: 詳細リンク */}
               <Link
                 href={`/artist/${selected.id}`}
                 className="flex-shrink-0 text-xs text-dim border border-border rounded-lg px-3 py-1.5 hover:border-dim hover:text-text transition-colors"
@@ -180,14 +263,11 @@ export default function HomeHero({
                 詳細 →
               </Link>
             </div>
-
-            {/* スパークライン */}
-            {hist.length >= 2 && (
+            {hist.length >= 2 ? (
               <div className={`mt-4 ${rising ? 'text-green-500' : 'text-red-400'}`}>
                 <Sparkline values={hist} rising={rising} />
               </div>
-            )}
-            {hist.length < 2 && (
+            ) : (
               <p className="mt-4 text-xs text-dim">指数データ蓄積中...</p>
             )}
           </div>
@@ -209,33 +289,32 @@ export default function HomeHero({
 
         <div className="bg-surface border border-border rounded-xl overflow-hidden">
           {filtered.map((artist, i) => {
-            const h = histories[artist.id] ?? []
-            const val = h.at(-1) ?? artist.current_index
-            const p = h.at(-2)
-            const up = p === undefined || val >= p
-            const pct = p ? ((val - p) / p) * 100 : null
-            const rank = artists.indexOf(artist) + 1
+            const h    = histories[artist.id] ?? []
+            const val  = h.at(-1) ?? artist.current_index
+            const p    = h.at(-2)
+            const up   = p === undefined || val >= p
+            const pct  = p ? ((val - p) / p) * 100 : null
+            const rank = sortedAll.indexOf(artist) + 1
+            const score = getScore(artist, h, rankType)
 
             return (
               <Link key={artist.id} href={`/artist/${artist.id}`}>
                 <div className={`flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-surface2/50 transition-colors ${i % 2 === 0 ? '' : 'bg-surface2/30'}`}>
-                  <span className="text-xs text-dim tabular-nums w-6 text-right flex-shrink-0">
-                    {rank}
-                  </span>
+                  <span className="text-xs text-dim tabular-nums w-6 text-right flex-shrink-0">{rank}</span>
                   {artist.thumbnail_url ? (
-                    <Image
-                      src={artist.thumbnail_url}
-                      alt={artist.name}
-                      width={32}
-                      height={32}
-                      className="rounded-full flex-shrink-0"
-                    />
+                    <Image src={artist.thumbnail_url} alt={artist.name}
+                      width={32} height={32} className="rounded-full flex-shrink-0" />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-border flex-shrink-0" />
                   )}
                   <span className="flex-1 text-sm font-medium truncate">{artist.name}</span>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    {pct !== null && (
+                    {rankType !== 'index' && (
+                      <span className={`text-xs tabular-nums ${score >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                        {rankLabel(score, rankType)}
+                      </span>
+                    )}
+                    {pct !== null && rankType === 'index' && (
                       <span className={`text-xs tabular-nums ${up ? 'text-green-500' : 'text-red-400'}`}>
                         {up ? '+' : ''}{pct.toFixed(2)}%
                       </span>

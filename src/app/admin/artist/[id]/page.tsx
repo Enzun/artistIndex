@@ -48,7 +48,7 @@ export default async function AdminArtistPage({
   const previewInitialIndex = artist.index_scale
     ? Math.floor(artist.index_scale).toLocaleString()
     : latestTotalViews
-    ? Math.floor(Math.sqrt(latestTotalViews) * 10).toLocaleString()
+    ? Math.round(0.0526 * Math.pow(latestTotalViews, 0.468)).toLocaleString()
     : null
 
   return (
@@ -144,7 +144,7 @@ export default async function AdminArtistPage({
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-xl p-4">
-            <p className="text-xs text-dim mb-1">公開時の初期値（SCALE）</p>
+            <p className="text-xs text-dim mb-1">SCALE（追加時に確定済み）</p>
             <p className="text-sm font-semibold tabular-nums">
               {previewInitialIndex ? `${previewInitialIndex} pt` : '—'}
             </p>
