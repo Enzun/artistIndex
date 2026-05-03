@@ -99,6 +99,9 @@ export default async function AdminPage() {
     if (!snapsByArtist.has(row.artist_id)) snapsByArtist.set(row.artist_id, [])
     snapsByArtist.get(row.artist_id)!.push(row as SnapRow)
   }
+  const artistList = (artists ?? []) as Artist[]
+  const logList = (cronLogs ?? []) as CronLog[]
+
   const artistScaleMap = new Map<string, number>()
   for (const a of artistList) {
     if (a.index_scale) artistScaleMap.set(a.id, a.index_scale)
@@ -110,9 +113,6 @@ export default async function AdminPage() {
     const params = scale ? { ...DEFAULT_H_PARAMS, SCALE: scale } : DEFAULT_H_PARAMS
     hIndexMap[artistId] = calcHIndex(snaps, params)
   }
-
-  const artistList = (artists ?? []) as Artist[]
-  const logList = (cronLogs ?? []) as CronLog[]
 
   const activeCount = artistList.filter(a => a.status === 'active').length
   const collectingCount = artistList.filter(a => a.status === 'collecting').length
