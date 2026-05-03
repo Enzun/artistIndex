@@ -309,14 +309,19 @@ export default function HomeHero({
                   )}
                   <span className="flex-1 text-sm font-medium truncate">{artist.name}</span>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    {rankType !== 'index' && (
-                      <span className={`text-xs tabular-nums ${score >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                        {rankLabel(score, rankType)}
-                      </span>
-                    )}
-                    {pct !== null && rankType === 'index' && (
+                    {rankType === 'index' && pct !== null && (
                       <span className={`text-xs tabular-nums ${up ? 'text-green-500' : 'text-red-400'}`}>
                         {up ? '+' : ''}{pct.toFixed(2)}%
+                      </span>
+                    )}
+                    {rankType !== 'index' && (
+                      <span className={`text-xs tabular-nums text-right ${score >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                        {rankLabel(score, rankType)}
+                        {rankType === 'daily' && p !== undefined && (
+                          <span className="text-dim ml-1">
+                            ({(score >= 0 ? '+' : '') + Math.floor(val - p).toLocaleString()} pt)
+                          </span>
+                        )}
                       </span>
                     )}
                     <span className="text-sm font-bold tabular-nums w-20 text-right">
