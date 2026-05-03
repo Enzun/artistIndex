@@ -12,7 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export const maxDuration = 60
 
 const WIKI_UA = 'artistIndex-admin/1.0 (https://artist-index.vercel.app/)'
-const MAX_DATES_PER_RUN = 5  // 1回の実行で処理する最大日数
+const MAX_DATES_PER_RUN = 1  // 1回の実行で処理する最大日数（タイムアウト対策）
 
 async function fetchTop(date: string): Promise<Map<string, number>> {
   const [y, m, d] = date.split('-')

@@ -1,54 +1,134 @@
-■ 現在の状態（2026-04-30時点）
-    - active: Mrs. GREEN APPLE、サンボマスター
-    - collecting: 数十件（データ蓄積中）
-    - 毎日 0:05 JST に自動でデータ収集・指数計算が動いている（Vercel Cron）
-    - GitHub Actions の daily_update.yml は無効化済み（Vercel Cronに統一）
+■ 現在の状態（2026-05-03時点）
+    - active: 数名（H式指数で公開中）
+    - collecting: 約240件（データ蓄積中）
+    - 毎日 JST 00:01 fetch → 00:10 calc の順で自動実行（Vercel Cron）
+    - Spotify は 2026年2月のAPI変更で利用不可 → 完全撤去済み
     - 初期付与ポイント: 5,000pt
     - ランディングページ（/welcome）・プレビューページ（/preview）・設定ページ（/settings）実装済み
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+■ 指数（H式）の仕様
+
+    【SCALE（アーティスト基準値）】
+        SCALE = round(0.0526 × total_views^0.468)
+        - 追加時の総再生数から計算し artists.index_scale に保存（以後変更なし）
+        - 10M再生 → 約100pt、60億再生 → 約2000pt が目安
+        - 公開（activate）時に current_index = index_scale からスタート
+
+    【H式 index = (1 - blendW) × E + blendW × B】
+        B = total_views^yta × SF × max(wR, 0.1)^wb
+        E = B × max(ytM, 0.05)^ytg
+        SF = SCALE / startViews^yta
+        ytM = avg(daily_rate, ws日) / avg(daily_rate, wlYt日)
+        wR  = avg(wiki_pv, ws日)    / avg(wiki_pv,    wlWiki日)
+
+        デフォルトパラメータ（DEFAULT_H_PARAMS）:
+            SCALE=500, yta=1.15, ytg=0.85, wb=0.15
+            ws=1, wlWiki=14, wlYt=14, blendW=0.70
+
+    【daily_rate 補間】
+        YouTubeは1〜2日おきに更新。増分Xが区間N日で発生した場合、
+        各日にX/Nを均等割り。最終更新レートはその後も継続（キャリーフォワード）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 日々の自動処理フロー（Vercel Cron）
+
+    JST 00:01（UTC 15:01）: /api/cron/fetch
+        - 全アーティストの YouTube 総再生数を 50件バッチで取得
+        - Wikipedia ページビューを JST 00:01 時点で UTC 2日前のデータで取得
+          （Wikimedia API の公開遅延のため。Top1000一括 → 漏れ分個別の2段階）
+        - view_snapshots に upsert（snapshot_date = JST当日）
+
+    JST 00:10（UTC 15:10）: /api/cron/calc
+        - active アーティストのスナップ全件を取得（ページネーション対応）
+        - 各アーティストの index_scale を SCALE として H 式指数を計算
+        - artists.current_index と view_snapshots.index_value を更新
+
+    ※ calc は fetch の完了後に実行する必要があるため 9分の余裕をもたせている
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ■ アーティスト追加の流れ
 
-    【Admin フォームから1人追加】
-    1. /admin を開く
-    2. アーティスト名を入力して「追加」
-    3. MusicBrainz + YouTube API + Wikipedia API が自動で走り、
-       YouTube / Spotify / Wikipedia を芋づる式に取得してDBに登録される
-    4. YouTubeが見つからない場合のみエラーになる（他は空欄のまま登録）
+    【Admin フォームから1人追加（/admin）】
+    1. アーティスト名を入力して「追加」
+    2. MusicBrainz + YouTube API + Wikipedia API が自動で走る
+       - YouTube チャンネルID・サムネイル・総再生数を取得
+       - Wikipedia 記事名を MusicBrainz 優先・検索API補完で取得
+       - index_scale = round(0.0526 × total_views^0.468) を計算・保存
+       - 当日の初回スナップショット（daily_increase=0）を挿入
+       - status = 'collecting' で登録
+    3. YouTube が見つからない場合のみエラー（他は空欄のまま登録）
 
     【コマンドラインから一括追加】
-    1. 名前リストのファイルを用意（1行1アーティスト名 or JSON配列）
-    2. 実行:
-           npx tsx --env-file=.env scripts/auto_add_artists.ts data/names.txt
-           npx tsx --env-file=.env scripts/auto_add_artists.ts data/names.json
-    3. YouTube未解決・エラーのアーティストはログに出るので手動確認
+        npx tsx --env-file=.env scripts/auto_add_artists.ts data/names.txt
+        npx tsx --env-file=.env scripts/auto_add_artists.ts data/names.json
+        ※ YouTube 未解決・エラーのアーティストはログに出るので手動確認
 
-    【Spotify IDが未設定のアーティストを後から補完】
-           npx tsx --env-file=.env scripts/fill_spotify_ids.ts
-           npx tsx --env-file=.env scripts/fill_spotify_ids.ts --dry-run  # 確認のみ
+    【Wikipedia 記事名が未設定のアーティストを後から補完】
+        npx tsx --env-file=.env scripts/fill_wikipedia_ids.ts
+        npx tsx --env-file=.env scripts/fill_wikipedia_ids.ts --dry-run
+        ※ MusicBrainz → Wikipedia 検索API の順で解決。dry-run で確認推奨
+
+    【Admin 一覧から Wikipedia 記事名を直接編集】
+        - /admin 一覧の Wikipedia 列テキストをクリック → 入力欄に切り替わる
+        - Enter で保存、Escape でキャンセル
+        - WP アイコンクリックで外部サイトを確認しながら編集可能
+        - 最新スナップで取得できていない場合は赤色表示
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ■ アーティスト公開の流れ
 
-    1. collecting 登録後、1〜2週間データを溜める
-    2. Admin ページ（/admin）でアーティストを選んでグラフを確認
-    3. 指数の動きが問題なければ「公開する」ボタンを押す → active に切り替わる
-    4. /preview と / のアーティスト一覧に表示される
+    1. collecting 登録後、データを溜める（目安：2週間以上）
+    2. Admin アーティストページ（/admin/artist/[id]）でグラフを確認
+       - H式指数グラフが表示される（追加日から計算）
+       - SCALE（追加時に確定済み）= 公開時の初期指数
+    3. 問題なければ「公開する」ボタン → active に切り替え
+       - current_index = index_scale にセット
+       - published_at を記録
+    4. トップページ（/）のランキングに表示される
 
     ※ Admin パスワードは ADMIN_PASSWORD 環境変数で設定
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+■ 管理用エンドポイント（手動実行）
+
+    【全履歴の H 式再計算】（SCALE 変更後・初回導入後などに実行）
+        curl -X POST https://artist-index.vercel.app/api/admin/recalc-history \
+          -H "Cookie: admin_session=（パスワード）"
+        → fetched_snaps / artists / snapshots / artists_updated を返す
+
+    【wikipedia_pageviews の NULL 埋め】（1回につき1日分処理）
+        curl -X POST https://artist-index.vercel.app/api/admin/fill-wikipedia \
+          -H "Cookie: admin_session=（パスワード）"
+        → has_more: true なら繰り返し実行。完了後に recalc-history も実行
+
+    【index_scale の一括バックフィル】（Supabase SQL Editor で実行）
+        UPDATE artists
+        SET index_scale = ROUND(0.0526 * POWER(first_snap.total_views::float, 0.468))
+        FROM (
+          SELECT DISTINCT ON (artist_id) artist_id, total_views
+          FROM view_snapshots WHERE total_views IS NOT NULL
+          ORDER BY artist_id, snapshot_date ASC
+        ) first_snap
+        WHERE artists.id = first_snap.artist_id;
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ■ 今後やること（優先順）
 
-    1. アーティストを増やす
-        - collecting期間（目安：1〜2週間）でデータを溜める
-        - Admin ページで確認しながら active に切り替え
+    1. アーティストを増やす・公開する
+        - collecting 期間中に wikipedia_pageviews が溜まるのを待つ
+        - fill-wikipedia で既存 NULL を補完 → recalc-history で再計算
+        - Admin ページで指数グラフを確認してから active に切り替え
 
-    2. アーティストページに YouTube 情報を表示
-        - サムネイル・チャンネル登録者数・総再生数
+    2. アーティストページの改善
+        - YouTube 情報表示（総再生数・登録者数）
+        - 指数グラフの改善
 
     3. 投資履歴の表示
         - ポートフォリオページに購入日・売却損益の履歴
@@ -57,26 +137,28 @@
         - アーティストページ：アーティスト名＋指数＋ミニチャート
         - トップページ：アプリの説明画像
 
-    5. ランキング機能
-        - 指数上昇率ランキングなど
-
-    6. プレゼントポイントシステム
+    5. プレゼントポイントシステム
         - Admin から全ユーザーに一括付与できる機能
 
-    7. 取引時間制限
+    6. 取引時間制限
         - 6時〜25時のみ invest/withdraw を受け付ける
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ■ 技術的な注意点
 
-    - サンボマスターのmonthly historyデータ未投入（任意）
-    - YouTube APIクォータ：デフォルト10,000units/日
-      1000アーティストでも1日20units（50件バッチ）で余裕あり
-    - Vercel Hobby プランのcronは2本まで（現在2本使用中: fetch・calc）
-    - MusicBrainz API: 認証なし・1req/秒レート制限・インディーはカバー薄い
-    - チャンネルBAN・削除時の扱い未対応
-        現状：fetchがスキップ → 指数が据え置きになる
-        本来：0再生扱いにして暴落させるべきだが、API障害との区別が難しいため保留
-    - 将来hourly化するときは view_snapshots の snapshot_date(DATE) を
+    - YouTube API クォータ：デフォルト 10,000 units/日
+      245アーティストで1日約5units（50件バッチ）。余裕あり
+    - Vercel Hobby プランの cron は 2本まで（fetch・calc で使用中）
+    - Supabase PostgREST の max-rows 上限（デフォルト1000）
+      → 全件取得が必要な箇所は .range() でページネーション対応済み
+    - Wikipedia Wikimedia API
+        - UTC 基準集計。Cron 実行時点（UTC 15:01）では当日未確定のため2日前取得
+        - Top1000 一括取得 → 漏れ分個別取得の2段階で 429 を回避
+        - Top1000 に入らない地下アイドル等は個別取得（低PVなら NULL のまま）
+    - MusicBrainz API：認証なし・1req/秒レート制限・インディーはカバー薄い
+    - チャンネル BAN・削除時の扱い未対応
+        現状：fetch がスキップ → 指数が据え置き
+        本来：0再生扱いにして暴落させるべきだが、API 障害との区別が難しく保留
+    - 将来 hourly 化するときは view_snapshots の snapshot_date(DATE) を
       snapshot_at(TIMESTAMPTZ) に変更するマイグレーションが必要
