@@ -2,7 +2,7 @@
  * POST /api/admin/fill-wikipedia
  * view_snapshots.wikipedia_pageviews が NULL の行を Wikimedia API で埋める。
  * 日付ごとに top-1000 を一括取得し、残りは個別取得。
- * 何度実行しても安全。
+ * 何度実行しても安全。タイムアウト対策で1回5日分まで処理し has_more を返す。
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,13 +12,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export const maxDuration = 60
 
 const WIKI_UA = 'artistIndex-admin/1.0 (https://artist-index.vercel.app/)'
+const MAX_DATES_PER_RUN = 5  // 1回の実行で処理する最大日数
 
 async function fetchTop(date: string): Promise<Map<string, number>> {
   const [y, m, d] = date.split('-')
   const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/top/ja.wikipedia.org/all-access/${y}/${m}/${d}`
   const res = await fetch(url, {
     headers: { 'User-Agent': WIKI_UA },
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(10000),
   })
   if (!res.ok) return new Map()
   const data = await res.json() as { items: [{ articles: { article: string; views: number }[] }] }
@@ -36,9 +37,8 @@ async function fetchSingle(title: string, date: string): Promise<number | null> 
   const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/ja.wikipedia.org/all-access/all-agents/${encoded}/daily/${d}/${d}`
   const res = await fetch(url, {
     headers: { 'User-Agent': WIKI_UA },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(6000),
   })
-  if (res.status === 404) return null
   if (!res.ok) return null
   const data = await res.json() as { items?: { views: number }[] }
   return data.items?.[0]?.views ?? null
@@ -68,14 +68,19 @@ export async function POST(request: NextRequest) {
   const artistIds = [...titleMap.keys()]
   if (!artistIds.length) return NextResponse.json({ ok: true, filled: 0 })
 
-  // NULL 行を全取得（ページネーション）
-  type NullRow = { artist_id: string; snapshot_date: string }
+  // NULL 行を total_views / daily_increase ごと取得（upsert に必要）
+  type NullRow = {
+    artist_id: string
+    snapshot_date: string
+    total_views: number
+    daily_increase: number
+  }
   const nullRows: NullRow[] = []
   let offset = 0
   while (true) {
     const { data } = await sb
       .from('view_snapshots')
-      .select('artist_id, snapshot_date')
+      .select('artist_id, snapshot_date, total_views, daily_increase')
       .in('artist_id', artistIds)
       .is('wikipedia_pageviews', null)
       .order('snapshot_date')
@@ -88,36 +93,41 @@ export async function POST(request: NextRequest) {
 
   if (!nullRows.length) return NextResponse.json({ ok: true, filled: 0, message: 'NULLなし' })
 
-  // 日付ごとにグループ化
+  // 日付ごとにグループ化（古い順）
   const byDate = new Map<string, NullRow[]>()
   for (const row of nullRows) {
     if (!byDate.has(row.snapshot_date)) byDate.set(row.snapshot_date, [])
     byDate.get(row.snapshot_date)!.push(row)
   }
 
+  const dates = [...byDate.keys()].sort().slice(0, MAX_DATES_PER_RUN)
+  const hasMore = byDate.size > MAX_DATES_PER_RUN
+
   let filled = 0
   let notFound = 0
 
-  for (const [date, rows] of byDate) {
-    // top-1000 を一括取得
+  for (const date of dates) {
+    const rows = byDate.get(date)!
+
+    // top-1000 一括取得
     const topMap = await fetchTop(date)
 
+    const upserts: { artist_id: string; snapshot_date: string; total_views: number; daily_increase: number; wikipedia_pageviews: number }[] = []
     const remaining: NullRow[] = []
-    const updates: { artist_id: string; snapshot_date: string; wikipedia_pageviews: number }[] = []
 
     for (const row of rows) {
       const title = titleMap.get(row.artist_id)
       if (!title) continue
       const views = topMap.get(title) ?? topMap.get(title.replace(/ /g, '_'))
       if (views !== undefined) {
-        updates.push({ artist_id: row.artist_id, snapshot_date: row.snapshot_date, wikipedia_pageviews: views })
+        upserts.push({ ...row, wikipedia_pageviews: views })
       } else {
         remaining.push(row)
       }
     }
 
-    // top-1000 に入らなかった分を個別取得（3並列）
-    const CONCURRENCY = 3
+    // top-1000 外を個別取得（5並列）
+    const CONCURRENCY = 5
     for (let i = 0; i < remaining.length; i += CONCURRENCY) {
       const chunk = remaining.slice(i, i + CONCURRENCY)
       const settled = await Promise.allSettled(
@@ -125,34 +135,31 @@ export async function POST(request: NextRequest) {
       )
       settled.forEach((r, j) => {
         if (r.status === 'fulfilled' && r.value !== null) {
-          updates.push({
-            artist_id: chunk[j].artist_id,
-            snapshot_date: chunk[j].snapshot_date,
-            wikipedia_pageviews: r.value,
-          })
+          upserts.push({ ...chunk[j], wikipedia_pageviews: r.value })
         } else {
           notFound++
         }
       })
-      if (i + CONCURRENCY < remaining.length) await sleep(300)
+      if (i + CONCURRENCY < remaining.length) await sleep(200)
     }
 
-    // まとめて update
-    for (const u of updates) {
-      await sb
+    // バッチ upsert（1000件ずつ）
+    const CHUNK = 1000
+    for (let i = 0; i < upserts.length; i += CHUNK) {
+      const { error } = await sb
         .from('view_snapshots')
-        .update({ wikipedia_pageviews: u.wikipedia_pageviews })
-        .eq('artist_id', u.artist_id)
-        .eq('snapshot_date', u.snapshot_date)
-      filled++
+        .upsert(upserts.slice(i, i + CHUNK), { onConflict: 'artist_id,snapshot_date' })
+      if (error) return NextResponse.json({ error: `upsert: ${error.message}` }, { status: 500 })
+      filled += Math.min(CHUNK, upserts.length - i)
     }
   }
 
   return NextResponse.json({
-    ok: true,
-    null_rows:  nullRows.length,
-    dates:      byDate.size,
+    ok:        true,
+    processed_dates: dates.length,
+    total_dates:     byDate.size,
+    has_more:  hasMore,
     filled,
-    not_found:  notFound,
+    not_found: notFound,
   })
 }
