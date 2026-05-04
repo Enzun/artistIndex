@@ -393,43 +393,52 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
       </div>
 
       {/* アーティスト称号 */}
-      <div className="mb-10">
-        <h2 className="text-sm font-semibold mb-4">アーティスト称号</h2>
-        <div className="flex flex-col gap-2">
-          {(
-            [
-              'ultra_watcher', 'watcher', 'digger', 'pioneer',
-              'holder_1m', 'holder_3m', 'holder_6m', 'holder_1y',
-            ] as ArtistAchievementCode[]
-          ).flatMap(code => {
-            const achieved = artistAchievements.filter(a => a.type === code)
-            if (achieved.length > 0) {
-              return achieved.map((ach, i) => {
-                const artistName = (Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'
-                return (
-                  <div key={`${code}-${i}`} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3">
-                    <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
-                      <p className="text-xs text-dim truncate">{artistName}</p>
-                    </div>
-                    <span className="ml-auto text-xs text-dim flex-shrink-0">{ach.achieved_at.split('T')[0]}</span>
+      {(() => {
+        // 常時チラ見せする称号（未達成でもグレー表示）
+        const TEASER = new Set<ArtistAchievementCode>(['digger', 'pioneer', 'holder_1m', 'holder_3m'])
+        const ALL_CODES: ArtistAchievementCode[] = [
+          'ultra_watcher', 'watcher', 'digger', 'pioneer',
+          'holder_1m', 'holder_3m', 'holder_6m', 'holder_1y',
+        ]
+
+        const rows = ALL_CODES.flatMap(code => {
+          const achieved = artistAchievements.filter(a => a.type === code)
+          if (achieved.length > 0) {
+            // 達成済み: アーティスト名と日付を表示
+            return achieved.map((ach, i) => {
+              const artistName = (Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'
+              return (
+                <div key={`${code}-${i}`} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3">
+                  <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
+                    <p className="text-xs text-dim truncate">{artistName}</p>
                   </div>
-                )
-              })
-            }
-            return [(
-              <div key={code} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3 opacity-40">
-                <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
-                  <p className="text-xs text-dim">{ARTIST_ACHIEVEMENT_CONDITIONS[code]}</p>
+                  <span className="ml-auto text-xs text-dim flex-shrink-0">{ach.achieved_at.split('T')[0]}</span>
                 </div>
+              )
+            })
+          }
+          // 未達成: テーザー対象のみグレー表示、それ以外は非表示
+          if (!TEASER.has(code)) return []
+          return [(
+            <div key={code} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3 opacity-40">
+              <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
+                <p className="text-xs text-dim">{ARTIST_ACHIEVEMENT_CONDITIONS[code]}</p>
               </div>
-            )]
-          })}
-        </div>
-      </div>
+            </div>
+          )]
+        })
+
+        return (
+          <div className="mb-10">
+            <h2 className="text-sm font-semibold mb-4">アーティスト称号</h2>
+            <div className="flex flex-col gap-2">{rows}</div>
+          </div>
+        )
+      })()}
 
       {/* 実績称号 */}
       <div className="mb-8">
