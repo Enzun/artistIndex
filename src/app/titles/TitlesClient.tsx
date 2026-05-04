@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getShape, getColorPosition, positionToColor, SHAPE_EMOJI, SHAPE_RANGES, MAX_PER_SHAPE } from '@/lib/titles'
 import {
   ACHIEVEMENT_LABELS, BAGGER_THRESHOLDS, SCALE_THRESHOLDS,
-  ARTIST_ACHIEVEMENT_LABELS, ARTIST_ACHIEVEMENT_EMOJI,
+  ARTIST_ACHIEVEMENT_LABELS, ARTIST_ACHIEVEMENT_EMOJI, ARTIST_ACHIEVEMENT_CONDITIONS,
   type ArtistAchievementCode,
 } from '@/lib/achievements'
 
@@ -336,7 +336,10 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
 
       {/* 購入フォーム */}
       <div className="bg-surface border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm font-semibold mb-4">称号を獲得する</h2>
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-sm font-semibold">称号を獲得する</h2>
+          <span className="text-xs text-dim">同じ形状は3つまで</span>
+        </div>
         <div className="flex gap-3 items-start">
           <div className="flex-1">
             <input
@@ -368,29 +371,112 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
         </div>
       </div>
 
-      {/* 保有称号 */}
-      {grouped.length === 0 ? (
-        <p className="text-dim text-sm text-center py-12">まだ称号がありません</p>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {grouped.map(({ shape, items }) => (
-            <div key={shape}>
-              <p className="text-xs text-dim font-medium mb-3">
-                {SHAPE_EMOJI[shape]} {shape}（{items.length}/{MAX_PER_SHAPE}）
-              </p>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {items.map(t => (
-                  <TitleBadge
-                    key={t.id}
-                    pts={t.points_spent}
-                    onDiscard={() => handleDiscard(t.id, t.points_spent)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+      {/* 購入称号 */}
+      <div className="mb-10">
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-sm font-semibold">購入称号</h2>
+          <span className="text-xs text-dim">× で完全削除</span>
         </div>
-      )}
+        {titles.length === 0 ? (
+          <p className="text-dim text-sm text-center py-8">まだ称号がありません</p>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+            {[...titles].sort((a, b) => a.points_spent - b.points_spent).map(t => (
+              <TitleBadge
+                key={t.id}
+                pts={t.points_spent}
+                onDiscard={() => handleDiscard(t.id, t.points_spent)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* アーティスト称号 */}
+      <div className="mb-10">
+        <h2 className="text-sm font-semibold mb-4">アーティスト称号</h2>
+        <div className="flex flex-col gap-2">
+          {(
+            [
+              'ultra_watcher', 'watcher', 'digger', 'pioneer',
+              'holder_1m', 'holder_3m', 'holder_6m', 'holder_1y',
+            ] as ArtistAchievementCode[]
+          ).flatMap(code => {
+            const achieved = artistAchievements.filter(a => a.type === code)
+            if (achieved.length > 0) {
+              return achieved.map((ach, i) => {
+                const artistName = (Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'
+                return (
+                  <div key={`${code}-${i}`} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3">
+                    <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
+                      <p className="text-xs text-dim truncate">{artistName}</p>
+                    </div>
+                    <span className="ml-auto text-xs text-dim flex-shrink-0">{ach.achieved_at.split('T')[0]}</span>
+                  </div>
+                )
+              })
+            }
+            return [(
+              <div key={code} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3 opacity-40">
+                <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
+                  <p className="text-xs text-dim">{ARTIST_ACHIEVEMENT_CONDITIONS[code]}</p>
+                </div>
+              </div>
+            )]
+          })}
+        </div>
+      </div>
+
+      {/* 実績称号 */}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold mb-4">実績称号</h2>
+
+        {/* バガー系 */}
+        <div className="mb-4">
+          <p className="text-xs text-dim font-medium mb-2">📈 バガー（売却利益率）</p>
+          <div className="grid grid-cols-2 gap-2">
+            {BAGGER_THRESHOLDS.map(b => {
+              const achieved = achievements.find(a => a.type === b.code)
+              return (
+                <div
+                  key={b.code}
+                  className={`rounded-xl border p-3 ${achieved ? 'border-orange-200 bg-orange-50' : 'border-border opacity-40'}`}
+                >
+                  <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[b.code]}</p>
+                  <p className="text-xs text-dim mt-0.5">
+                    {achieved ? achieved.achieved_at.split('T')[0] : `+${Math.round((b.multiplier - 1) * 100)}%以上で売却`}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 規模系 */}
+        <div>
+          <p className="text-xs text-dim font-medium mb-2">💰 規模（1回の購入額）</p>
+          <div className="grid grid-cols-2 gap-2">
+            {SCALE_THRESHOLDS.map(s => {
+              const achieved = achievements.find(a => a.type === s.code)
+              return (
+                <div
+                  key={s.code}
+                  className={`rounded-xl border p-3 ${achieved ? 'border-text/20 bg-surface2' : 'border-border opacity-40'}`}
+                >
+                  <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[s.code]}</p>
+                  <p className="text-xs text-dim mt-0.5">
+                    {achieved ? achieved.achieved_at.split('T')[0] : `${s.minPoints.toLocaleString()}pt以上を購入`}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* ピッカーモーダル */}
       {pickerSlot !== null && (
@@ -401,123 +487,6 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
           onClose={() => setPickerSlot(null)}
         />
       )}
-
-      {/* 実績称号 */}
-      <div className="mt-10">
-        <h2 className="text-sm font-semibold mb-5">実績称号</h2>
-
-        {/* バガー系 */}
-        <div className="mb-6">
-          <p className="text-xs text-dim font-medium mb-2">📈 バガー（売却利益率）</p>
-          <div className="grid grid-cols-2 gap-2">
-            {BAGGER_THRESHOLDS.map(b => {
-              const achieved = achievements.find(a => a.type === b.code)
-              return (
-                <div
-                  key={b.code}
-                  className={`rounded-xl border p-3 transition-opacity ${
-                    achieved ? 'border-orange-200 bg-orange-50' : 'border-border opacity-40'
-                  }`}
-                >
-                  <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[b.code]}</p>
-                  <p className="text-xs text-dim mt-0.5">
-                    {achieved
-                      ? achieved.achieved_at.split('T')[0]
-                      : `+${Math.round((b.multiplier - 1) * 100)}%以上で売却`}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* 規模系 */}
-        <div className="mb-6">
-          <p className="text-xs text-dim font-medium mb-2">💰 規模（1回の購入額）</p>
-          <div className="grid grid-cols-2 gap-2">
-            {SCALE_THRESHOLDS.map(s => {
-              const achieved = achievements.find(a => a.type === s.code)
-              return (
-                <div
-                  key={s.code}
-                  className={`rounded-xl border p-3 transition-opacity ${
-                    achieved ? 'border-text/20 bg-surface2' : 'border-border opacity-40'
-                  }`}
-                >
-                  <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[s.code]}</p>
-                  <p className="text-xs text-dim mt-0.5">
-                    {achieved
-                      ? achieved.achieved_at.split('T')[0]
-                      : `${s.minPoints.toLocaleString()}pt以上を購入`}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* 早期発見系（アーティストごと） */}
-        {(() => {
-          const EARLY_CODES = new Set(['ultra_watcher', 'watcher', 'digger', 'pioneer', 'visionary'])
-          const items = artistAchievements.filter(a => EARLY_CODES.has(a.type))
-          if (items.length === 0) return null
-          return (
-            <div className="mb-6">
-              <p className="text-xs text-dim font-medium mb-2">👁 早期発見（アーティストごと）</p>
-              <div className="flex flex-col gap-2">
-                {items.map((ach, i) => {
-                  const code = ach.type as ArtistAchievementCode
-                  return (
-                    <div key={i} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3">
-                      <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
-                        <p className="text-xs text-dim truncate">
-                          {(Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'}
-                        </p>
-                      </div>
-                      <span className="ml-auto text-xs text-dim flex-shrink-0">
-                        {ach.achieved_at.split('T')[0]}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })()}
-
-        {/* 長期保有系（アーティストごと） */}
-        {(() => {
-          const HOLDER_CODES = new Set(['holder_1m', 'holder_3m', 'holder_6m', 'holder_1y'])
-          const items = artistAchievements.filter(a => HOLDER_CODES.has(a.type))
-          if (items.length === 0) return null
-          return (
-            <div>
-              <p className="text-xs text-dim font-medium mb-2">📅 長期保有（アーティストごと）</p>
-              <div className="flex flex-col gap-2">
-                {items.map((ach, i) => {
-                  const code = ach.type as ArtistAchievementCode
-                  return (
-                    <div key={i} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3">
-                      <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
-                        <p className="text-xs text-dim truncate">
-                          {(Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'}
-                        </p>
-                      </div>
-                      <span className="ml-auto text-xs text-dim flex-shrink-0">
-                        {ach.achieved_at.split('T')[0]}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })()}
-      </div>
     </div>
   )
 }

@@ -82,6 +82,18 @@ export const HOLDER_THRESHOLDS: { code: ArtistAchievementCode; minDays: number }
   { code: 'holder_1y', minDays: 365 },
 ]
 
+/** 内部コード → 達成条件テキスト（未達成時の表示用） */
+export const ARTIST_ACHIEVEMENT_CONDITIONS: Record<ArtistAchievementCode, string> = {
+  ultra_watcher: '公開から1日以内に購入',
+  watcher:       '公開から3日以内に購入',
+  digger:        '公開から7日以内に購入',
+  pioneer:       '公開から30日以内に購入',
+  holder_1m:     '初回購入から30日以上保有',
+  holder_3m:     '初回購入から90日以上保有',
+  holder_6m:     '初回購入から180日以上保有',
+  holder_1y:     '初回購入から365日以上保有',
+}
+
 /**
  * 購入時の経過日数からアーティスト早期発見称号コードを返す（最も厳しい段のみ）
  * 例: 2日目購入 → 'watcher'（監視者）
