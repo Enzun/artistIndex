@@ -64,6 +64,8 @@ export default async function PortfolioPage() {
   }))
 
   const totalEval = Array.from(returnMap.values()).reduce((s, v) => s + v, 0)
+  const totalInvested = Array.from(artistMap.values()).reduce((s, a) => s + a.totalInvested, 0)
+  const unrealizedPnL = totalEval - totalInvested
   const freePoints = profile?.free_points ?? 0
   const totalPoints = freePoints + totalEval
 
@@ -110,13 +112,14 @@ export default async function PortfolioPage() {
       {/* サマリー */}
       <div className="grid grid-cols-3 gap-3 mb-8">
         {[
-          { label: '所持ポイント', value: `${freePoints.toLocaleString()} pt` },
-          { label: '評価額', value: `${totalEval.toLocaleString()} pt` },
-          { label: '総ポイント', value: `${totalPoints.toLocaleString()} pt` },
-        ].map(({ label, value }) => (
+          { label: '所持ポイント', value: `${freePoints.toLocaleString()} pt`, sub: null, subColor: '' },
+          { label: '評価額', value: `${totalEval.toLocaleString()} pt`, sub: totalInvested > 0 ? `${unrealizedPnL >= 0 ? '+' : ''}${unrealizedPnL.toLocaleString()} pt` : null, subColor: unrealizedPnL >= 0 ? 'text-mga' : 'text-accent' },
+          { label: '総ポイント', value: `${totalPoints.toLocaleString()} pt`, sub: null, subColor: '' },
+        ].map(({ label, value, sub, subColor }) => (
           <div key={label} className="bg-surface border border-border rounded-xl p-4 text-center">
             <p className="text-xs text-dim mb-1">{label}</p>
             <p className="text-xl font-bold tabular-nums">{value}</p>
+            {sub && <p className={`text-xs tabular-nums mt-0.5 ${subColor}`}>{sub}</p>}
           </div>
         ))}
       </div>
