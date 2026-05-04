@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/fetch",
       "schedule": "1 15 * * *"
-    },
-    {
-      "path": "/api/cron/calc",
-      "schedule": "10 15 * * *"
     }
   ]
 }

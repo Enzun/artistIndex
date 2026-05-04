@@ -1,12 +1,14 @@
 /**
  * GET /api/cron/fetch
- * YouTube 総再生数 + Wikipedia ページビューを取得して view_snapshots に upsert する。
- * YouTube: channels.list を 50 件バッチ
+ * 1. YouTube 総再生数 + Wikipedia ページビューを取得して view_snapshots に upsert
+ * 2. fetch 完了後、active アーティストの H 式指数を計算（旧 /api/cron/calc の処理）
  */
 
 import { NextResponse } from 'next/server'
 import { verifyCronAuth, getServiceClient } from '../_lib/auth'
 import { CronLogger } from '../_lib/logger'
+import { calcHIndex, DEFAULT_H_PARAMS, type SnapRow } from '@/lib/indexFormula'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -35,9 +37,6 @@ async function fetchYoutubeBatch(channelIds: string[]): Promise<YTItem[]> {
 
 const WIKI_UA = 'artistIndex-cron/1.0 (https://artist-index.vercel.app/)'
 
-// Top 1000記事を1リクエストで取得（レートリミット回避）
-// Wikimediaのトップページデータは公開に最大2日かかるため、
-// 昨日が404なら一昨日にフォールバック
 async function fetchWikipediaTop(date: string): Promise<Map<string, number>> {
   type Article = { article: string; views: number }
   const tryDate = async (d: string) => {
@@ -52,7 +51,6 @@ async function fetchWikipediaTop(date: string): Promise<Map<string, number>> {
 
   let res = await tryDate(date)
   if (res.status === 404) {
-    // 1日さらに遡る
     const prev = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000)
       .toISOString().split('T')[0]
     res = await tryDate(prev)
@@ -68,7 +66,6 @@ async function fetchWikipediaTop(date: string): Promise<Map<string, number>> {
   return map
 }
 
-// Top 1000に入らなかった記事を個別取得（件数は少ないはず）
 async function fetchWikipediaViews(title: string, date: string): Promise<number | null> {
   const encoded = encodeURIComponent(title.replace(/ /g, '_'))
   const d = date.replace(/-/g, '')
@@ -92,7 +89,6 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
   const notFound: string[] = []
   const failed: string[] = []
 
-  // Step 1: Top 1000で一括取得
   let topMap = new Map<string, number>()
   try {
     topMap = await fetchWikipediaTop(date)
@@ -129,6 +125,82 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
   return { found, notFound, failed }
 }
 
+// ─── Calc（fetch 完了後に直列実行） ─────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function runCalc(sb: SupabaseClient<any, any, any>, today: string): Promise<Record<string, unknown>> {
+  const result: Record<string, unknown> = { ok: 0, skipped: 0, errors: [] as string[] }
+
+  const { data: artists, error: artistErr } = await sb
+    .from('artists')
+    .select('id, index_scale')
+    .eq('status', 'active')
+  if (artistErr) { (result.errors as string[]).push(`calc artists: ${artistErr.message}`); return result }
+
+  const list = artists ?? []
+  if (!list.length) return result
+
+  const artistIds = list.map((a: { id: string }) => a.id)
+
+  type RawSnap = SnapRow & { artist_id: string }
+  const PAGE_SIZE = 1000
+  const allSnaps: RawSnap[] = []
+  let offset = 0
+  while (true) {
+    const { data, error: snapErr } = await sb
+      .from('view_snapshots')
+      .select('artist_id, snapshot_date, total_views, daily_increase, wikipedia_pageviews')
+      .in('artist_id', artistIds)
+      .order('artist_id')
+      .order('snapshot_date', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1)
+    if (snapErr) { (result.errors as string[]).push(`calc snaps: ${snapErr.message}`); return result }
+    if (!data?.length) break
+    allSnaps.push(...(data as RawSnap[]))
+    if (data.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
+  }
+
+  const snapsByArtist = new Map<string, SnapRow[]>()
+  for (const snap of allSnaps) {
+    if (!snapsByArtist.has(snap.artist_id)) snapsByArtist.set(snap.artist_id, [])
+    snapsByArtist.get(snap.artist_id)!.push(snap)
+  }
+
+  type ArtistUpdate   = { id: string; current_index: number }
+  type SnapshotUpdate = { artist_id: string; snapshot_date: string; index_value: number }
+  const artistUpdates:   ArtistUpdate[]   = []
+  const snapshotUpdates: SnapshotUpdate[] = []
+
+  for (const artist of list as { id: string; index_scale: number | null }[]) {
+    const snaps = snapsByArtist.get(artist.id) ?? []
+    if (!snaps.length) { result.skipped = (result.skipped as number) + 1; continue }
+
+    const params = artist.index_scale
+      ? { ...DEFAULT_H_PARAMS, SCALE: artist.index_scale }
+      : DEFAULT_H_PARAMS
+
+    const newIndex = calcHIndex(snaps, params)
+    if (newIndex === null) { result.skipped = (result.skipped as number) + 1; continue }
+
+    const rounded = Math.round(newIndex * 100) / 100
+    artistUpdates.push({ id: artist.id, current_index: rounded })
+    snapshotUpdates.push({ artist_id: artist.id, snapshot_date: today, index_value: rounded })
+    result.ok = (result.ok as number) + 1
+  }
+
+  if (artistUpdates.length > 0) {
+    const { error: e } = await sb.from('artists').upsert(artistUpdates, { onConflict: 'id' })
+    if (e) (result.errors as string[]).push(`calc artists upsert: ${e.message}`)
+  }
+  if (snapshotUpdates.length > 0) {
+    const { error: e } = await sb.from('view_snapshots').upsert(snapshotUpdates, { onConflict: 'artist_id,snapshot_date' })
+    if (e) (result.errors as string[]).push(`calc snapshots upsert: ${e.message}`)
+  }
+
+  return result
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
@@ -142,8 +214,6 @@ export async function GET(request: Request) {
 
   const nowJST = Date.now() + 9 * 60 * 60 * 1000
   const today = new Date(nowJST).toISOString().split('T')[0]
-  // WikimediaはUTC基準で集計。Cronは JST 00:01 = UTC 15:01 に実行されるため
-  // UTC当日はまだ未確定。UTC前日（= JST2日前）のデータを取得する。
   const wikiDate = new Date(nowJST - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const summary: Record<string, unknown> = { date: today, ok: 0, error: 0, errors: [] as string[] }
 
@@ -154,9 +224,9 @@ export async function GET(request: Request) {
     if (error) throw error
 
     const list = artists ?? []
-
-    // ── 前日以前の最新 YouTube スナップショットを一括取得 ──
     const artistIds = list.map(a => a.id)
+
+    // ── 前日以前の最新スナップ ──
     const { data: prevSnaps } = await sb
       .from('view_snapshots')
       .select('artist_id, total_views, snapshot_date')
@@ -172,8 +242,7 @@ export async function GET(request: Request) {
     }
 
     // ── YouTube バッチ取得 ──
-    const ytMap = new Map<string, number>()  // channelId → totalViews
-    const ytArtistMap = new Map(list.map(a => [a.youtube_channel_id, a]))
+    const ytMap = new Map<string, number>()
     const ytChunks: string[][] = []
     for (let i = 0; i < list.length; i += BATCH_SIZE) {
       ytChunks.push(list.slice(i, i + BATCH_SIZE).map(a => a.youtube_channel_id))
@@ -226,7 +295,7 @@ export async function GET(request: Request) {
 
     for (const artist of list) {
       const totalViews = ytMap.get(artist.youtube_channel_id)
-      if (totalViews === undefined) continue  // YouTube 取得失敗はスキップ
+      if (totalViews === undefined) continue
 
       const prevViews = prevMap.get(artist.id)
       const dailyIncrease = prevViews !== undefined ? Math.max(totalViews - prevViews, 0) : 0
@@ -259,6 +328,9 @@ export async function GET(request: Request) {
         summary.ok = upsertRows.length
       }
     }
+
+    // ── H 式指数計算（active アーティストのみ） ──
+    summary.calc = await runCalc(sb, today)
 
     await logger.finish('success', summary)
     return NextResponse.json(summary)
