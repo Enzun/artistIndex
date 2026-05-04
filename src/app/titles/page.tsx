@@ -8,9 +8,10 @@ export default async function TitlesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: profile }, { data: titles }] = await Promise.all([
+  const [{ data: profile }, { data: titles }, { data: achievements }] = await Promise.all([
     supabase.from('users').select('free_points').eq('id', user.id).single(),
     supabase.from('titles').select('id, points_spent, created_at, showcase_order').eq('user_id', user.id).order('created_at', { ascending: false }),
+    supabase.from('user_achievements').select('type, achieved_at').eq('user_id', user.id),
   ])
 
   return (
@@ -24,6 +25,7 @@ export default async function TitlesPage() {
       <TitlesClient
         titles={titles ?? []}
         freePoints={profile?.free_points ?? 0}
+        achievements={achievements ?? []}
       />
     </div>
   )

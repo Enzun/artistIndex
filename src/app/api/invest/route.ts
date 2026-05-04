@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { BASE_SLOTS } from '@/lib/titles'
+import { SCALE_THRESHOLDS } from '@/lib/achievements'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -63,6 +64,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'すでに投入中です' }, { status: 400 })
     }
     return NextResponse.json({ error: '投入に失敗しました' }, { status: 500 })
+  }
+
+  // 規模系称号を付与（重複は無視・失敗しても投資は成功扱い）
+  const scaleGrants = SCALE_THRESHOLDS
+    .filter(s => points >= s.minPoints)
+    .map(s => ({ user_id: user.id, type: s.code }))
+  if (scaleGrants.length > 0) {
+    await supabase
+      .from('user_achievements')
+      .upsert(scaleGrants, { onConflict: 'user_id,type', ignoreDuplicates: true })
   }
 
   return NextResponse.json({ ok: true })

@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getShape, getColorPosition, positionToColor, SHAPE_EMOJI, SHAPE_RANGES, MAX_PER_SHAPE } from '@/lib/titles'
+import { ACHIEVEMENT_LABELS, BAGGER_THRESHOLDS, SCALE_THRESHOLDS } from '@/lib/achievements'
 
 type Title = { id: string; points_spent: number; created_at: string; showcase_order: number | null }
+type Achievement = { type: string; achieved_at: string }
 
 type Props = {
   titles: Title[]
   freePoints: number
+  achievements: Achievement[]
 }
 
 function TitleBadge({ pts, onDiscard, compact }: { pts: number; onDiscard?: () => void; compact?: boolean }) {
@@ -164,7 +167,7 @@ function TitlePicker({
 
 // ── メインコンポーネント ──────────────────────────────────────────────────
 
-export default function TitlesClient({ titles: initialTitles, freePoints: initialPoints }: Props) {
+export default function TitlesClient({ titles: initialTitles, freePoints: initialPoints, achievements }: Props) {
   const [titles, setTitles]         = useState(initialTitles)
   const [freePoints, setFreePoints] = useState(initialPoints)
   const [input, setInput]           = useState('')
@@ -387,6 +390,61 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
           onClose={() => setPickerSlot(null)}
         />
       )}
+
+      {/* 実績称号 */}
+      <div className="mt-10">
+        <h2 className="text-sm font-semibold mb-5">実績称号</h2>
+
+        {/* バガー系 */}
+        <div className="mb-6">
+          <p className="text-xs text-dim font-medium mb-2">📈 バガー（売却利益率）</p>
+          <div className="grid grid-cols-2 gap-2">
+            {BAGGER_THRESHOLDS.map(b => {
+              const achieved = achievements.find(a => a.type === b.code)
+              return (
+                <div
+                  key={b.code}
+                  className={`rounded-xl border p-3 transition-opacity ${
+                    achieved ? 'border-orange-200 bg-orange-50' : 'border-border opacity-40'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[b.code]}</p>
+                  <p className="text-xs text-dim mt-0.5">
+                    {achieved
+                      ? achieved.achieved_at.split('T')[0]
+                      : `+${Math.round((b.multiplier - 1) * 100)}%以上で売却`}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 規模系 */}
+        <div>
+          <p className="text-xs text-dim font-medium mb-2">💰 規模（1回の購入額）</p>
+          <div className="grid grid-cols-2 gap-2">
+            {SCALE_THRESHOLDS.map(s => {
+              const achieved = achievements.find(a => a.type === s.code)
+              return (
+                <div
+                  key={s.code}
+                  className={`rounded-xl border p-3 transition-opacity ${
+                    achieved ? 'border-text/20 bg-surface2' : 'border-border opacity-40'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[s.code]}</p>
+                  <p className="text-xs text-dim mt-0.5">
+                    {achieved
+                      ? achieved.achieved_at.split('T')[0]
+                      : `${s.minPoints.toLocaleString()}pt以上を購入`}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

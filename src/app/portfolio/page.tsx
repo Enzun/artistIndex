@@ -16,7 +16,7 @@ export default async function PortfolioPage() {
 
   const { data: investments } = await supabase
     .from('investments')
-    .select('*, artist:artists(id, name, current_index)')
+    .select('*, artist:artists(id, name, current_index, published_at)')
     .eq('user_id', user.id)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
@@ -29,27 +29,33 @@ export default async function PortfolioPage() {
     .order('withdrawn_at', { ascending: false })
 
   type InvestmentWithArtist = Investment & {
-    artist: { id: string; name: string; current_index: number }
+    artist: { id: string; name: string; current_index: number; published_at: string | null }
   }
 
   const items = (investments ?? []) as InvestmentWithArtist[]
 
-  // アーティストごとに集約
+  // アーティストごとに集約（投資はcreated_at昇順なので最初の要素が最古）
   const artistMap = new Map<string, {
     id: string
     name: string
     currentIndex: number
     totalShares: number
     totalInvested: number
+    publishedAt: string | null
+    earliestInvestmentAt: string
   }>()
   const returnMap = new Map<string, number>()
 
   for (const inv of items) {
-    const { id, name, current_index } = inv.artist
+    const { id, name, current_index, published_at } = inv.artist
     const shares = Math.round(inv.points_invested / inv.index_at_entry)
     const invReturn = Math.round(inv.points_invested * (current_index / inv.index_at_entry))
     if (!artistMap.has(id)) {
-      artistMap.set(id, { id, name, currentIndex: current_index, totalShares: 0, totalInvested: 0 })
+      artistMap.set(id, {
+        id, name, currentIndex: current_index, totalShares: 0, totalInvested: 0,
+        publishedAt: published_at,
+        earliestInvestmentAt: inv.created_at,
+      })
       returnMap.set(id, 0)
     }
     const entry = artistMap.get(id)!
@@ -61,6 +67,8 @@ export default async function PortfolioPage() {
   const holdings = Array.from(artistMap.values()).map(a => ({
     ...a,
     currentValue: returnMap.get(a.id) ?? 0,
+    publishedAt: a.publishedAt,
+    earliestInvestmentAt: a.earliestInvestmentAt,
   }))
 
   const totalEval = Array.from(returnMap.values()).reduce((s, v) => s + v, 0)

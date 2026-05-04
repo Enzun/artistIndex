@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { slotCost, BASE_SLOTS } from '@/lib/titles'
+import { getBaggerLabel } from '@/lib/achievements'
+import { getEarlyBirdTitle, getHolderTitle } from '@/lib/dynamicTitles'
 
 type HoldingItem = {
   id: string
@@ -12,6 +14,8 @@ type HoldingItem = {
   totalShares: number
   totalInvested: number
   currentValue: number
+  publishedAt: string | null
+  earliestInvestmentAt: string
 }
 
 type HistoryItem = {
@@ -153,6 +157,26 @@ export default function PortfolioTabs({ holdings, history, pointSlots, freePoint
                       </p>
                     </div>
                   </div>
+                  {/* 動的称号バッジ */}
+                  {(() => {
+                    const earlyTitle  = getEarlyBirdTitle(a.earliestInvestmentAt, a.publishedAt)
+                    const holderTitle = getHolderTitle(a.earliestInvestmentAt)
+                    if (!earlyTitle && !holderTitle) return null
+                    return (
+                      <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-border">
+                        {earlyTitle && (
+                          <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                            {earlyTitle}
+                          </span>
+                        )}
+                        {holderTitle && (
+                          <span className="text-xs bg-mga/10 text-mga px-2 py-0.5 rounded-full font-medium">
+                            {holderTitle}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </Link>
             )
@@ -270,6 +294,14 @@ export default function PortfolioTabs({ holdings, history, pointSlots, freePoint
                       {isSold && item.pointsReturned !== null && (
                         <span>売却 {item.pointsReturned.toLocaleString()} pt</span>
                       )}
+                      {isSold && item.pointsReturned !== null && (() => {
+                        const bagger = getBaggerLabel(item.pointsInvested, item.pointsReturned)
+                        return bagger ? (
+                          <span className="bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded font-medium">
+                            {bagger}
+                          </span>
+                        ) : null
+                      })()}
                       {isSold && (
                         <span className="ml-auto">{(item.withdrawnAt ?? item.createdAt).split('T')[0]}</span>
                       )}
