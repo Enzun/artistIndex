@@ -3,15 +3,26 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getShape, getColorPosition, positionToColor, SHAPE_EMOJI, SHAPE_RANGES, MAX_PER_SHAPE } from '@/lib/titles'
-import { ACHIEVEMENT_LABELS, BAGGER_THRESHOLDS, SCALE_THRESHOLDS } from '@/lib/achievements'
+import {
+  ACHIEVEMENT_LABELS, BAGGER_THRESHOLDS, SCALE_THRESHOLDS,
+  ARTIST_ACHIEVEMENT_LABELS, ARTIST_ACHIEVEMENT_EMOJI,
+  type ArtistAchievementCode,
+} from '@/lib/achievements'
 
 type Title = { id: string; points_spent: number; created_at: string; showcase_order: number | null }
 type Achievement = { type: string; achieved_at: string }
+type ArtistAchievement = {
+  type: string
+  achieved_at: string
+  artist_id: string
+  artist: { name: string } | { name: string }[] | null
+}
 
 type Props = {
   titles: Title[]
   freePoints: number
   achievements: Achievement[]
+  artistAchievements: ArtistAchievement[]
 }
 
 function TitleBadge({ pts, onDiscard, compact }: { pts: number; onDiscard?: () => void; compact?: boolean }) {
@@ -167,7 +178,7 @@ function TitlePicker({
 
 // ── メインコンポーネント ──────────────────────────────────────────────────
 
-export default function TitlesClient({ titles: initialTitles, freePoints: initialPoints, achievements }: Props) {
+export default function TitlesClient({ titles: initialTitles, freePoints: initialPoints, achievements, artistAchievements }: Props) {
   const [titles, setTitles]         = useState(initialTitles)
   const [freePoints, setFreePoints] = useState(initialPoints)
   const [input, setInput]           = useState('')
@@ -421,7 +432,7 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
         </div>
 
         {/* 規模系 */}
-        <div>
+        <div className="mb-6">
           <p className="text-xs text-dim font-medium mb-2">💰 規模（1回の購入額）</p>
           <div className="grid grid-cols-2 gap-2">
             {SCALE_THRESHOLDS.map(s => {
@@ -444,6 +455,68 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
             })}
           </div>
         </div>
+
+        {/* 早期発見系（アーティストごと） */}
+        {(() => {
+          const EARLY_CODES = new Set(['ultra_watcher', 'watcher', 'digger', 'pioneer', 'visionary'])
+          const items = artistAchievements.filter(a => EARLY_CODES.has(a.type))
+          if (items.length === 0) return null
+          return (
+            <div className="mb-6">
+              <p className="text-xs text-dim font-medium mb-2">👁 早期発見（アーティストごと）</p>
+              <div className="flex flex-col gap-2">
+                {items.map((ach, i) => {
+                  const code = ach.type as ArtistAchievementCode
+                  return (
+                    <div key={i} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3">
+                      <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
+                        <p className="text-xs text-dim truncate">
+                          {(Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'}
+                        </p>
+                      </div>
+                      <span className="ml-auto text-xs text-dim flex-shrink-0">
+                        {ach.achieved_at.split('T')[0]}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* 長期保有系（アーティストごと） */}
+        {(() => {
+          const HOLDER_CODES = new Set(['holder_1m', 'holder_3m', 'holder_6m', 'holder_1y'])
+          const items = artistAchievements.filter(a => HOLDER_CODES.has(a.type))
+          if (items.length === 0) return null
+          return (
+            <div>
+              <p className="text-xs text-dim font-medium mb-2">📅 長期保有（アーティストごと）</p>
+              <div className="flex flex-col gap-2">
+                {items.map((ach, i) => {
+                  const code = ach.type as ArtistAchievementCode
+                  return (
+                    <div key={i} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3">
+                      <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
+                        <p className="text-xs text-dim truncate">
+                          {(Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'}
+                        </p>
+                      </div>
+                      <span className="ml-auto text-xs text-dim flex-shrink-0">
+                        {ach.achieved_at.split('T')[0]}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )

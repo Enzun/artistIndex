@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { BASE_SLOTS } from '@/lib/titles'
-import { SCALE_THRESHOLDS } from '@/lib/achievements'
+import { SCALE_THRESHOLDS, getEarlyBirdCode } from '@/lib/achievements'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '無効なパラメータです' }, { status: 400 })
   }
 
-  // get current index
+  // get current index + published_at（早期発見称号の判定に使用）
   const { data: artist } = await supabase
     .from('artists')
-    .select('current_index, status')
+    .select('current_index, status, published_at')
     .eq('id', artist_id)
     .single()
 
@@ -74,6 +74,21 @@ export async function POST(request: NextRequest) {
     await supabase
       .from('user_achievements')
       .upsert(scaleGrants, { onConflict: 'user_id,type', ignoreDuplicates: true })
+  }
+
+  // 早期発見系称号を付与（アーティストごと・重複は無視）
+  const publishedAt = (artist as { published_at?: string | null }).published_at
+  if (publishedAt) {
+    const diffDays = (Date.now() - new Date(publishedAt).getTime()) / 86_400_000
+    const earlyCode = getEarlyBirdCode(diffDays)
+    if (earlyCode) {
+      await supabase
+        .from('user_artist_achievements')
+        .upsert(
+          [{ user_id: user.id, artist_id, type: earlyCode }],
+          { onConflict: 'user_id,artist_id,type', ignoreDuplicates: true },
+        )
+    }
   }
 
   return NextResponse.json({ ok: true })

@@ -2,6 +2,8 @@
 // 内部コード(type列)と表示名を分離することで、後から表示名だけ変更できる。
 // DB に保存されるのは内部コードのみ。
 
+// ── グローバル称号（user_achievements テーブル） ──────────────────────────────
+
 export type AchievementCode =
   | 'half_bagger' | 'double_bagger' | 'triple_bagger' | 'ten_bagger'
   | 'investor' | 'big_investor' | 'rich' | 'whale'
@@ -18,9 +20,7 @@ export const ACHIEVEMENT_LABELS: Record<AchievementCode, string> = {
   whale:         '鯨🐋',
 }
 
-// ── バガー系（売却時に判定・一生に一度） ─────────────────────────────────────
-// multiplier = points_returned / points_invested の閾値
-// 小さい順に定義（複数同時達成時は該当するものすべて付与）
+/** バガー系: 売却時に判定・一生に一度（小さい順） */
 export const BAGGER_THRESHOLDS: { code: AchievementCode; multiplier: number }[] = [
   { code: 'half_bagger',   multiplier: 1.5  }, // +50%
   { code: 'double_bagger', multiplier: 2.0  }, // +100%
@@ -28,14 +28,71 @@ export const BAGGER_THRESHOLDS: { code: AchievementCode; multiplier: number }[] 
   { code: 'ten_bagger',    multiplier: 11.0 }, // +1000%
 ]
 
-// ── 規模系（購入時に判定・一生に一度） ───────────────────────────────────────
-// 小さい順に定義（複数同時達成時は該当するものすべて付与）
+/** 規模系: 購入時に判定・一生に一度（小さい順） */
 export const SCALE_THRESHOLDS: { code: AchievementCode; minPoints: number }[] = [
   { code: 'investor',     minPoints: 10_000 },
   { code: 'big_investor', minPoints: 100_000 },
   { code: 'rich',         minPoints: 1_000_000 },
   { code: 'whale',        minPoints: 10_000_000 },
 ]
+
+// ── アーティスト別称号（user_artist_achievements テーブル） ──────────────────
+
+export type ArtistAchievementCode =
+  | 'ultra_watcher' | 'watcher' | 'digger' | 'pioneer'
+  | 'holder_1m' | 'holder_3m' | 'holder_6m' | 'holder_1y'
+
+/** 内部コード → 表示名 */
+export const ARTIST_ACHIEVEMENT_LABELS: Record<ArtistAchievementCode, string> = {
+  ultra_watcher: '超監視者',
+  watcher:       '監視者',
+  digger:        '発掘者',
+  pioneer:       '先行者',
+  holder_1m:     '1ヶ月ホルダー',
+  holder_3m:     '3ヶ月ホルダー',
+  holder_6m:     '半年ホルダー',
+  holder_1y:     '年間ホルダー',
+}
+
+/** 内部コード → 絵文字 */
+export const ARTIST_ACHIEVEMENT_EMOJI: Record<ArtistAchievementCode, string> = {
+  ultra_watcher: '👁️',
+  watcher:       '👀',
+  digger:        '🔍',
+  pioneer:       '🚀',
+  holder_1m:     '📅',
+  holder_3m:     '📆',
+  holder_6m:     '🗓️',
+  holder_1y:     '🏆',
+}
+
+/** 早期発見系: 購入時に判定・永続（最大日数が小さい順） */
+export const EARLY_BIRD_THRESHOLDS: { code: ArtistAchievementCode; maxDays: number }[] = [
+  { code: 'ultra_watcher', maxDays: 1 },
+  { code: 'watcher',       maxDays: 3 },
+  { code: 'digger',        maxDays: 7 },
+  { code: 'pioneer',       maxDays: 30 },
+]
+
+/** 長期保有系: ページ訪問時に確認・永続（最小日数が小さい順） */
+export const HOLDER_THRESHOLDS: { code: ArtistAchievementCode; minDays: number }[] = [
+  { code: 'holder_1m', minDays: 30 },
+  { code: 'holder_3m', minDays: 90 },
+  { code: 'holder_6m', minDays: 180 },
+  { code: 'holder_1y', minDays: 365 },
+]
+
+/**
+ * 購入時の経過日数からアーティスト早期発見称号コードを返す（最も厳しい段のみ）
+ * 例: 2日目購入 → 'watcher'（監視者）
+ */
+export function getEarlyBirdCode(diffDays: number): ArtistAchievementCode | null {
+  if (diffDays < 0) return null
+  for (const t of EARLY_BIRD_THRESHOLDS) {
+    if (diffDays <= t.maxDays) return t.code
+  }
+  return null // 90日超はなし
+}
 
 // ── ユーティリティ ────────────────────────────────────────────────────────────
 
