@@ -106,8 +106,8 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
     }
   }
 
-  // Step 2: Top 1000外の記事を個別取得（5並列・500ms間隔）
-  const CONCURRENCY = 5
+  // Step 2: Top 1000外の記事を個別取得（3並列・200ms間隔）
+  const CONCURRENCY = 3
   for (let i = 0; i < remaining.length; i += CONCURRENCY) {
     const chunk = remaining.slice(i, i + CONCURRENCY)
     const settled = await Promise.allSettled(chunk.map(t => fetchWikipediaViews(t, date)))
@@ -119,7 +119,7 @@ async function fetchWikipediaBatch(titles: string[], date: string): Promise<{
         failed.push(`${chunk[j]}: ${r.reason}`)
       }
     })
-    if (i + CONCURRENCY < remaining.length) await new Promise(r => setTimeout(r, 500))
+    if (i + CONCURRENCY < remaining.length) await new Promise(r => setTimeout(r, 200))
   }
 
   return { found, notFound, failed }
