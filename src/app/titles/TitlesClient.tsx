@@ -170,7 +170,8 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
   const [input, setInput]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState('')
-  const [pickerSlot, setPickerSlot] = useState<number | null>(null)  // 開いているスロット番号
+  const [pickerSlot, setPickerSlot] = useState<number | null>(null)
+  const [shareMsg, setShareMsg]     = useState('')
   const router = useRouter()
 
   const pts = parseInt(input) || 0
@@ -205,6 +206,38 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
       }))
     }
     setPickerSlot(null)
+  }
+
+  async function handleShare() {
+    const showcased = [1, 2, 3]
+      .map(slot => titles.find(t => t.showcase_order === slot))
+      .filter(Boolean) as Title[]
+
+    if (showcased.length === 0) {
+      setShareMsg('称号をスロットにセットしてからシェアしてください')
+      setTimeout(() => setShareMsg(''), 3000)
+      return
+    }
+
+    const titleText = showcased
+      .map(t => `${SHAPE_EMOJI[getShape(t.points_spent)]} ${getShape(t.points_spent)}（${t.points_spent.toLocaleString()}pt）`)
+      .join(' / ')
+    const text = `称号コレクション\n${titleText}`
+    const url  = 'https://artist-index.vercel.app/'
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: 'artistIndex 称号', text, url })
+        setShareMsg('シェアしました')
+      } catch {
+        // キャンセルは無視
+      }
+    } else {
+      // フォールバック: Xに投稿
+      const xUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(text + '\n' + url)}`
+      window.open(xUrl, '_blank', 'noopener')
+    }
+    setTimeout(() => setShareMsg(''), 3000)
   }
 
   async function handleRemoveShowcase(titleId: string) {
@@ -256,7 +289,21 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
     <div>
       {/* ショーケース */}
       <div className="mb-6">
-        <p className="text-xs text-dim font-medium mb-3">シェア用称号（最大3つ）</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-dim font-medium">シェア用称号（最大3つ）</p>
+          <div className="flex items-center gap-2">
+            {shareMsg && <span className="text-xs text-dim">{shareMsg}</span>}
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 text-dim hover:border-dim hover:text-text transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              シェア
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-3 gap-3">
           {showcaseSlots.map((title, i) => (
             <ShowcaseSlot
