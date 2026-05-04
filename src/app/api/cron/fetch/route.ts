@@ -189,13 +189,24 @@ async function runCalc(sb: SupabaseClient<any, any, any>, today: string): Promis
     result.ok = (result.ok as number) + 1
   }
 
-  if (artistUpdates.length > 0) {
-    const { error: e } = await sb.from('artists').upsert(artistUpdates, { onConflict: 'id' })
-    if (e) (result.errors as string[]).push(`calc artists upsert: ${e.message}`)
+  // upsert ではなく update（NOT NULL 制約のある列を省略できないため）
+  const artistResults = await Promise.all(
+    artistUpdates.map(u => sb.from('artists').update({ current_index: u.current_index }).eq('id', u.id))
+  )
+  for (const { error: e } of artistResults) {
+    if (e) (result.errors as string[]).push(`calc artist update: ${e.message}`)
   }
-  if (snapshotUpdates.length > 0) {
-    const { error: e } = await sb.from('view_snapshots').upsert(snapshotUpdates, { onConflict: 'artist_id,snapshot_date' })
-    if (e) (result.errors as string[]).push(`calc snapshots upsert: ${e.message}`)
+
+  const snapResults = await Promise.all(
+    snapshotUpdates.map(u =>
+      sb.from('view_snapshots')
+        .update({ index_value: u.index_value })
+        .eq('artist_id', u.artist_id)
+        .eq('snapshot_date', u.snapshot_date)
+    )
+  )
+  for (const { error: e } of snapResults) {
+    if (e) (result.errors as string[]).push(`calc snapshot update: ${e.message}`)
   }
 
   return result
