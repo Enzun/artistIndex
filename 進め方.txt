@@ -1,7 +1,7 @@
-■ 現在の状態（2026-05-03時点）
+■ 現在の状態（2026-05-04時点）
     - active: 数名（H式指数で公開中）
     - collecting: 約240件（データ蓄積中）
-    - 毎日 JST 00:01 fetch → 00:10 calc の順で自動実行（Vercel Cron）
+    - 毎日 JST 00:01 fetch（内部で calc も直列実行）（Vercel Cron 1本）
     - Spotify は 2026年2月のAPI変更で利用不可 → 完全撤去済み
     - 初期付与ポイント: 5,000pt
     - ランディングページ（/welcome）・プレビューページ（/preview）・設定ページ（/settings）実装済み
@@ -35,18 +35,19 @@
 
 ■ 日々の自動処理フロー（Vercel Cron）
 
-    JST 00:01（UTC 15:01）: /api/cron/fetch
+    JST 00:01（UTC 15:01）: /api/cron/fetch  ← Cron はこの1本のみ
+        【Step 1: fetch】
         - 全アーティストの YouTube 総再生数を 50件バッチで取得
         - Wikipedia ページビューを JST 00:01 時点で UTC 2日前のデータで取得
-          （Wikimedia API の公開遅延のため。Top1000一括 → 漏れ分個別の2段階）
+          （Wikimedia API の公開遅延のため。Top1000一括 → 漏れ分個別5並列の2段階）
         - view_snapshots に upsert（snapshot_date = JST当日）
-
-    JST 00:10（UTC 15:10）: /api/cron/calc
+        【Step 2: calc（直列実行）】
         - active アーティストのスナップ全件を取得（ページネーション対応）
         - 各アーティストの index_scale を SCALE として H 式指数を計算
         - artists.current_index と view_snapshots.index_value を更新
 
-    ※ calc は fetch の完了後に実行する必要があるため 9分の余裕をもたせている
+    ※ /api/cron/calc は手動での再計算用として引き続き利用可能
+    ※ Vercel Hobby の cron 2本枠のうち 1本が空き（将来の拡張に使用可）
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
