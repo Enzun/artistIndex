@@ -10,7 +10,7 @@ export default async function TitlesPage() {
 
   const [{ data: profile }, { data: titles }] = await Promise.all([
     supabase.from('users').select('free_points').eq('id', user.id).single(),
-    supabase.from('titles').select('id, points_spent, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
+    supabase.from('titles').select('id, points_spent, created_at, showcase_order').eq('user_id', user.id).order('created_at', { ascending: false }),
   ])
 
   return (
