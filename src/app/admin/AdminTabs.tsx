@@ -80,11 +80,10 @@ const ACHIEVEMENT_DEFS: AchievementDef[] = [
   { category: '長期保有', name: '半年ホルダー [アーティスト]', condition: '初回購入から180日以上保有', type: '動的', status: '未実装', perArtist: true },
   { category: '長期保有', name: '年間ホルダー [アーティスト]', condition: '初回購入から365日以上保有', type: '動的', status: '未実装', perArtist: true },
   // 規模系
-  { category: '規模', name: '大口投資家', condition: '1回の購入が10,000pt以上', type: '付与型', status: '未実装', perArtist: false },
-  { category: '規模', name: '鯨', condition: '1回の購入が100,000pt以上', type: '付与型', status: '未実装', perArtist: false },
-  // 多様性系
-  { category: '多様性', name: '分散投資家', condition: '同時に3アーティスト以上保有', type: '動的', status: '未実装', perArtist: false },
-  { category: '多様性', name: 'コレクター', condition: '同時に5アーティスト以上保有', type: '動的', status: '未実装', perArtist: false },
+  { category: '規模', name: '投資家', condition: '1回の購入が10,000pt以上', type: '付与型', status: '未実装', perArtist: false },
+  { category: '規模', name: '大口投資家', condition: '1回の購入が100,000pt以上', type: '付与型', status: '未実装', perArtist: false },
+  { category: '規模', name: '富豪', condition: '1回の購入が1,000,000pt以上', type: '付与型', status: '未実装', perArtist: false },
+  { category: '規模', name: '鯨🐋', condition: '1回の購入が10,000,000pt以上', type: '付与型', status: '未実装', perArtist: false },
 ]
 
 // ── 称号タブ ──────────────────────────────────────────────────────────────
