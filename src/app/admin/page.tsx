@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import AdminArtistList from './AdminArtistList'
-import AddArtistForm from './AddArtistForm'
+import AdminTabs from './AdminTabs'
 import { calcHIndex, DEFAULT_H_PARAMS, type SnapRow } from '@/lib/indexFormula'
 
 type Artist = {
@@ -22,15 +21,6 @@ type SnapshotStat = {
   wikipedia_null: boolean
 }
 
-type CronLog = {
-  id: string
-  job: string
-  status: string
-  summary: Record<string, unknown> | null
-  created_at: string
-  finished_at: string | null
-}
-
 export default async function AdminPage() {
   const supabase = await createClient()
 
@@ -39,19 +29,18 @@ export default async function AdminPage() {
     { data: latestSnaps },
     { data: ytIncrSnaps },
     { data: cronLogs },
+    { data: titles },
   ] = await Promise.all([
     supabase
       .from('artists')
       .select('id, name, status, current_index, youtube_channel_id, wikipedia_ja, created_at, thumbnail_url, index_scale')
       .order('status')
       .order('name'),
-    // 最新スナップ（wikipedia_null チェック用）
     supabase
       .from('view_snapshots')
       .select('artist_id, snapshot_date, wikipedia_pageviews')
       .order('snapshot_date', { ascending: false })
       .limit(1000),
-    // YT更新日: daily_increase > 0 のみ取得
     supabase
       .from('view_snapshots')
       .select('artist_id, snapshot_date')
@@ -62,6 +51,9 @@ export default async function AdminPage() {
       .select('id, job, status, summary, created_at, finished_at')
       .order('created_at', { ascending: false })
       .limit(30),
+    supabase
+      .from('titles')
+      .select('id, points_spent, showcase_order, user_id'),
   ])
 
   // H式計算用: ページネーションで全スナップ取得
@@ -97,7 +89,6 @@ export default async function AdminPage() {
     }
     statsMap.get(row.artist_id)!.count++
   }
-  // YT更新日: 各アーティストの最新 daily_increase > 0 の日付
   for (const row of (ytIncrSnaps ?? [])) {
     const stat = statsMap.get(row.artist_id)
     if (stat && stat.last_yt_increase_date === null) {
@@ -112,7 +103,6 @@ export default async function AdminPage() {
     snapsByArtist.get(row.artist_id)!.push(row)
   }
   const artistList = (artists ?? []) as Artist[]
-  const logList = (cronLogs ?? []) as CronLog[]
 
   const artistScaleMap = new Map<string, number>()
   for (const a of artistList) {
@@ -128,6 +118,9 @@ export default async function AdminPage() {
 
   const activeCount = artistList.filter(a => a.status === 'active').length
   const collectingCount = artistList.filter(a => a.status === 'collecting').length
+
+  const titleList = (titles ?? []) as { id: string; points_spent: number; showcase_order: number | null; user_id: string }[]
+  const titleUserCount = new Set(titleList.map(t => t.user_id)).size
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -156,57 +149,14 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/* アーティスト追加 */}
-      <AddArtistForm />
-
-      {/* アーティスト一覧 */}
-      <AdminArtistList
+      <AdminTabs
         artists={artistList}
         statsMap={Object.fromEntries(statsMap)}
         hIndexMap={hIndexMap}
+        cronLogs={cronLogs ?? []}
+        titles={titleList}
+        titleUserCount={titleUserCount}
       />
-
-      {/* Cronログ */}
-      <h2 className="text-sm font-semibold mb-3">Cron ログ（直近30件）</h2>
-      <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs text-dim">
-              <th className="text-left px-4 py-2.5 font-medium">job</th>
-              <th className="text-left px-4 py-2.5 font-medium">status</th>
-              <th className="text-left px-4 py-2.5 font-medium">summary</th>
-              <th className="text-right px-4 py-2.5 font-medium">実行日時</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logList.map((log, i) => (
-              <tr key={log.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-surface2/50'}`}>
-                <td className="px-4 py-2.5 font-mono text-xs">{log.job}</td>
-                <td className="px-4 py-2.5">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    log.status === 'success' ? 'bg-mga/10 text-mga'
-                    : log.status === 'error' ? 'bg-accent/10 text-accent'
-                    : 'bg-surface2 text-dim'
-                  }`}>
-                    {log.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-xs text-dim font-mono">
-                  {log.summary ? JSON.stringify(log.summary) : '—'}
-                </td>
-                <td className="px-4 py-2.5 text-right text-dim text-xs">
-                  {log.created_at.replace('T', ' ').substring(0, 16)}
-                </td>
-              </tr>
-            ))}
-            {logList.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-dim text-xs">ログがありません</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   )
 }
