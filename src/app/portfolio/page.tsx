@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import type { Investment } from '@/lib/types'
 import PortfolioTabs from './PortfolioTabs'
 
@@ -66,21 +67,45 @@ export default async function PortfolioPage() {
   const freePoints = profile?.free_points ?? 0
   const totalPoints = freePoints + totalEval
 
-  const historyItems = (history ?? []).map((h) => {
+  // 保有中（未売却）を履歴に含める
+  const activeHistoryItems = items.map(inv => ({
+    id: inv.id,
+    artistName: inv.artist.name,
+    pointsInvested: inv.points_invested,
+    pointsReturned: null as number | null,
+    createdAt: inv.created_at,
+    withdrawnAt: null as string | null,
+    status: 'active' as const,
+  }))
+
+  const withdrawnHistoryItems = (history ?? []).map((h) => {
     const artist = Array.isArray(h.artist) ? h.artist[0] : h.artist
     return {
       id: h.id,
       artistName: (artist as { name: string } | null)?.name ?? '—',
       pointsInvested: h.points_invested,
-      pointsReturned: (h.points_returned as number | null) ?? 0,
+      pointsReturned: (h.points_returned as number | null),
       createdAt: h.created_at,
-      withdrawnAt: (h.withdrawn_at as string | null) ?? h.created_at,
+      withdrawnAt: (h.withdrawn_at as string | null),
+      status: 'withdrawn' as const,
     }
   })
 
+  const historyItems = [...activeHistoryItems, ...withdrawnHistoryItems]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
   return (
     <div>
-      <h1 className="text-xl font-bold mb-6">ポートフォリオ</h1>
+      {/* タイトル + 称号 */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-bold">ポートフォリオ</h1>
+        <Link
+          href="/titles"
+          className="text-xs border border-border rounded-lg px-3 py-1.5 text-dim hover:border-dim hover:text-text transition-colors"
+        >
+          🏅 称号
+        </Link>
+      </div>
 
       {/* サマリー */}
       <div className="grid grid-cols-3 gap-3 mb-8">

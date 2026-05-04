@@ -33,7 +33,6 @@ export default function ArtistInfo({ channelId, totalViews, thumbnailUrl, descri
         {/* 情報 */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-dim mb-2">
-            <span>登録者数: ——</span>
             <span>総再生数: {totalViews.toLocaleString()}</span>
           </div>
           {description ? (
