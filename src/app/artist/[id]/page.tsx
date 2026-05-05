@@ -82,7 +82,7 @@ export default async function ArtistPage({
             alt={artist.name}
             width={48}
             height={48}
-            className="rounded-full flex-shrink-0"
+            className="rounded-full flex-shrink-0 w-12 h-12 object-cover"
           />
         )}
         <h1 className="text-2xl font-bold">{artist.name}</h1>

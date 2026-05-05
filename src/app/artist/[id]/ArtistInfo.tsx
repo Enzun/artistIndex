@@ -12,7 +12,7 @@ export default function ArtistInfo({ channelId, totalViews, thumbnailUrl, descri
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5 mb-6">
-      <div className="flex gap-4">
+      <div className="flex gap-4 items-start">
         {/* サムネイル */}
         {thumbnailUrl ? (
           <Image
@@ -20,7 +20,7 @@ export default function ArtistInfo({ channelId, totalViews, thumbnailUrl, descri
             alt=""
             width={64}
             height={64}
-            className="rounded-full flex-shrink-0"
+            className="rounded-full flex-shrink-0 w-16 h-16 object-cover"
           />
         ) : (
           <div className="w-16 h-16 rounded-full bg-surface2 border border-border flex-shrink-0 flex items-center justify-center">
