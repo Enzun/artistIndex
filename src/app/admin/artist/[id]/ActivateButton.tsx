@@ -12,12 +12,17 @@ export default function ActivateButton({ artistId }: { artistId: string }) {
     if (!confirm('このアーティストを公開しますか？')) return
     setLoading(true)
     setError('')
-    const res = await fetch(`/api/admin/activate/${artistId}`, { method: 'POST' })
-    if (res.ok) {
-      router.refresh()
-    } else {
+    try {
+      const res = await fetch(`/api/admin/activate/${artistId}`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
-      setError(data.error ?? '失敗しました')
+      if (res.ok) {
+        router.refresh()
+      } else {
+        setError(data.error ?? '失敗しました')
+      }
+    } catch {
+      setError('通信エラーが発生しました（タイムアウトの可能性）')
+    } finally {
       setLoading(false)
     }
   }

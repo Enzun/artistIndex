@@ -20,8 +20,9 @@ export default async function RootLayout({
     <html lang="ja">
       <body className="min-h-screen">
         <nav className="border-b border-border px-6 py-3 flex items-center justify-between bg-surface">
-          <Link href="/" className="font-bold text-base tracking-tight">
+          <Link href="/" className="flex items-center gap-2 font-bold text-base tracking-tight">
             Artist Index
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded-md bg-surface2 text-dim border border-border">β</span>
           </Link>
           <div className="flex gap-5 text-sm">
             {user ? (
