@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { CONTACT_EMAIL } from '@/lib/config'
 
 // ── ヘルプ ────────────────────────────────────────────────────────────────
 
@@ -25,28 +26,37 @@ const HELP_ITEMS = [
   },
   {
     q: 'ポイントが足りません',
-    a: '登録時に5,000ptが無料で付与されます。売買で増やすことができます。',
+    a: '登録時に5,000ptが無料で付与されます。売買で増やすことができます。また、設定ページの「データをリセットする」を実行すると、全取引履歴が削除されて5,000ptからやり直せます（取り消し不可）。',
   },
 ]
 
 function HelpAccordion() {
   const [open, setOpen] = useState<number | null>(null)
   return (
-    <div className="border border-border rounded-xl overflow-hidden divide-y divide-border">
-      {HELP_ITEMS.map((item, i) => (
-        <div key={i}>
-          <button
-            onClick={() => setOpen(open === i ? null : i)}
-            className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-surface2/50 transition-colors"
-          >
-            <span className="text-sm font-medium">{item.q}</span>
-            <span className="text-dim text-xs ml-3 flex-shrink-0">{open === i ? '▲' : '▼'}</span>
-          </button>
-          {open === i && (
-            <div className="px-4 pb-4 text-xs text-dim leading-relaxed">{item.a}</div>
-          )}
-        </div>
-      ))}
+    <div className="flex flex-col gap-3">
+      <div className="border border-border rounded-xl overflow-hidden divide-y divide-border">
+        {HELP_ITEMS.map((item, i) => (
+          <div key={i}>
+            <button
+              onClick={() => setOpen(open === i ? null : i)}
+              className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-surface2/50 transition-colors"
+            >
+              <span className="text-sm font-medium">{item.q}</span>
+              <span className="text-dim text-xs ml-3 flex-shrink-0">{open === i ? '▲' : '▼'}</span>
+            </button>
+            {open === i && (
+              <div className="px-4 pb-4 text-xs text-dim leading-relaxed">{item.a}</div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-dim px-1">
+        その他のご質問は{' '}
+        <a href={`mailto:${CONTACT_EMAIL}`} className="underline hover:text-text transition-colors">
+          {CONTACT_EMAIL}
+        </a>{' '}
+        までお気軽にどうぞ。
+      </p>
     </div>
   )
 }

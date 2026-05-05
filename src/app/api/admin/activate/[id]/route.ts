@@ -29,7 +29,7 @@ export async function POST(
   const indexScale = artistData.index_scale
 
   // ── status を active に更新 ──
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('artists')
     .update({
       status: 'active',
@@ -39,9 +39,13 @@ export async function POST(
     })
     .eq('id', id)
     .eq('status', 'collecting')
+    .select('id')
 
   if (error) {
-    return NextResponse.json({ error: '更新に失敗しました' }, { status: 500 })
+    return NextResponse.json({ error: '更新に失敗しました: ' + error.message }, { status: 500 })
+  }
+  if (!updated || updated.length === 0) {
+    return NextResponse.json({ error: 'ステータスが collecting ではありません（既に公開済み、または別のステータスです）' }, { status: 400 })
   }
 
   // ── 過去スナップショットの index_value を全件バックフィル ──
