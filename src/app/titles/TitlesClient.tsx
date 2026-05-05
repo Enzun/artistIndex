@@ -4,26 +4,37 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getShape, getColorPosition, positionToColor, SHAPE_EMOJI, SHAPE_RANGES, MAX_PER_SHAPE } from '@/lib/titles'
 import {
-  ACHIEVEMENT_LABELS, BAGGER_THRESHOLDS, SCALE_THRESHOLDS,
+  ACHIEVEMENT_LABELS, ACHIEVEMENT_EMOJI, BAGGER_THRESHOLDS, SCALE_THRESHOLDS,
   ARTIST_ACHIEVEMENT_LABELS, ARTIST_ACHIEVEMENT_EMOJI, ARTIST_ACHIEVEMENT_CONDITIONS,
-  type ArtistAchievementCode,
+  type AchievementCode, type ArtistAchievementCode,
 } from '@/lib/achievements'
 
-type Title = { id: string; points_spent: number; created_at: string; showcase_order: number | null }
+type Title = { id: string; points_spent: number; created_at: string }
 type Achievement = { type: string; achieved_at: string }
 type ArtistAchievement = {
+  id: string
   type: string
   achieved_at: string
   artist_id: string
   artist: { name: string } | { name: string }[] | null
 }
+type ShowcaseRow = { slot: number; kind: string; ref: string }
+
+type ResolvedSlot =
+  | { kind: 'title'; title: Title }
+  | { kind: 'achievement'; ach: Achievement }
+  | { kind: 'artist_achievement'; ach: ArtistAchievement }
+  | null
 
 type Props = {
   titles: Title[]
   freePoints: number
   achievements: Achievement[]
   artistAchievements: ArtistAchievement[]
+  showcase: ShowcaseRow[]
 }
+
+// ── TitleBadge ────────────────────────────────────────────────────────────
 
 function TitleBadge({ pts, onDiscard, compact }: { pts: number; onDiscard?: () => void; compact?: boolean }) {
   const shape = getShape(pts)
@@ -65,20 +76,44 @@ function TitleBadge({ pts, onDiscard, compact }: { pts: number; onDiscard?: () =
   )
 }
 
-// ── ショーケーススロット ────────────────────────────────────────────────────
+// ── ShowcaseBadgeCompact ──────────────────────────────────────────────────
+
+function ShowcaseBadgeCompact({ resolved }: { resolved: NonNullable<ResolvedSlot> }) {
+  if (resolved.kind === 'title') {
+    return <TitleBadge pts={resolved.title.points_spent} compact />
+  }
+  if (resolved.kind === 'achievement') {
+    const code = resolved.ach.type as AchievementCode
+    return (
+      <div className="flex flex-col items-center gap-0.5 p-2 rounded-xl border border-border w-full bg-surface min-h-[6rem] justify-center">
+        <span className="text-2xl">{ACHIEVEMENT_EMOJI[code]}</span>
+        <span className="text-xs font-medium leading-tight text-center line-clamp-2 px-1">
+          {ACHIEVEMENT_LABELS[code]}
+        </span>
+      </div>
+    )
+  }
+  const code = resolved.ach.type as ArtistAchievementCode
+  const artistName = (Array.isArray(resolved.ach.artist) ? resolved.ach.artist[0]?.name : resolved.ach.artist?.name) ?? '—'
+  return (
+    <div className="flex flex-col items-center gap-0.5 p-2 rounded-xl border border-border w-full bg-surface min-h-[6rem] justify-center">
+      <span className="text-2xl">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+      <span className="text-xs font-medium leading-tight text-center line-clamp-1 px-1">
+        {ARTIST_ACHIEVEMENT_LABELS[code]}
+      </span>
+      <span className="text-xs text-dim truncate w-full text-center px-1">{artistName}</span>
+    </div>
+  )
+}
+
+// ── ShowcaseSlot ──────────────────────────────────────────────────────────
 
 function ShowcaseSlot({
-  slot,
-  title,
-  onClick,
-  onRemove,
+  slot, resolved, onClick, onRemove,
 }: {
-  slot: number
-  title: Title | null
-  onClick: () => void
-  onRemove: () => void
+  slot: number; resolved: ResolvedSlot; onClick: () => void; onRemove: () => void
 }) {
-  if (!title) {
+  if (!resolved) {
     return (
       <button
         onClick={onClick}
@@ -89,14 +124,10 @@ function ShowcaseSlot({
       </button>
     )
   }
-
-  const shape = getShape(title.points_spent)
-  const color = positionToColor(getColorPosition(title.points_spent))
-
   return (
     <div className="relative">
       <button onClick={onClick} className="w-full">
-        <TitleBadge pts={title.points_spent} compact />
+        <ShowcaseBadgeCompact resolved={resolved} />
       </button>
       <button
         onClick={e => { e.stopPropagation(); onRemove() }}
@@ -109,23 +140,25 @@ function ShowcaseSlot({
   )
 }
 
-// ── ピッカーモーダル ──────────────────────────────────────────────────────
+// ── TitlePicker (統合ピッカー) ────────────────────────────────────────────
+
+type PickerTab = 'title' | 'achievement' | 'artist_achievement'
 
 function TitlePicker({
-  titles,
-  currentId,
-  onSelect,
-  onClose,
+  titles, achievements, artistAchievements,
+  currentKind, currentRef,
+  onSelect, onClose,
 }: {
   titles: Title[]
-  currentId: string | null
-  onSelect: (title: Title) => void
+  achievements: Achievement[]
+  artistAchievements: ArtistAchievement[]
+  currentKind: string | null
+  currentRef: string | null
+  onSelect: (kind: string, ref: string) => void
   onClose: () => void
 }) {
-  const shapeOrder = SHAPE_RANGES.map(r => r.shape)
-  const grouped = shapeOrder
-    .map(shape => ({ shape, items: titles.filter(t => getShape(t.points_spent) === shape) }))
-    .filter(g => g.items.length > 0)
+  const [tab, setTab] = useState<PickerTab>('title')
+  const isSelected = (kind: string, ref: string) => kind === currentKind && ref === currentRef
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
@@ -138,38 +171,104 @@ function TitlePicker({
           <p className="text-sm font-semibold">称号を選ぶ</p>
           <button onClick={onClose} className="text-dim hover:text-text transition-colors text-sm">✕</button>
         </div>
-        {grouped.length === 0 ? (
-          <p className="text-dim text-sm text-center py-6">称号がありません</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {grouped.map(({ shape, items }) => (
-              <div key={shape}>
-                <p className="text-xs text-dim mb-2">{SHAPE_EMOJI[shape]} {shape}</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {items.map(t => {
-                    const color = positionToColor(getColorPosition(t.points_spent))
-                    const isSelected = t.id === currentId
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => onSelect(t)}
-                        className="relative rounded-xl border-2 transition-all"
-                        style={{
-                          borderColor: isSelected ? color : 'transparent',
-                          outline: isSelected ? `2px solid ${color}` : 'none',
-                        }}
-                      >
-                        <TitleBadge pts={t.points_spent} compact />
-                        {isSelected && (
-                          <span className="absolute top-1 right-1 text-xs" style={{ color }}>✓</span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+
+        {/* タブ */}
+        <div className="flex gap-1 mb-4 bg-surface rounded-lg p-1">
+          {([
+            ['title', '購入'],
+            ['achievement', '実績'],
+            ['artist_achievement', 'アーティスト'],
+          ] as [PickerTab, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${tab === key ? 'bg-bg font-medium shadow-sm' : 'text-dim hover:text-text'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* 購入称号 */}
+        {tab === 'title' && (
+          titles.length === 0 ? (
+            <p className="text-dim text-sm text-center py-6">称号がありません</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {[...titles].sort((a, b) => a.points_spent - b.points_spent).map(t => {
+                const selected = isSelected('title', t.id)
+                const color = positionToColor(getColorPosition(t.points_spent))
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => onSelect('title', t.id)}
+                    className="relative rounded-xl"
+                    style={selected ? { outline: `2px solid ${color}` } : {}}
+                  >
+                    <TitleBadge pts={t.points_spent} compact />
+                    {selected && <span className="absolute top-1 right-1 text-xs" style={{ color }}>✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        )}
+
+        {/* 実績称号 */}
+        {tab === 'achievement' && (
+          achievements.length === 0 ? (
+            <p className="text-dim text-sm text-center py-6">実績称号がありません</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {achievements.map(a => {
+                const code = a.type as AchievementCode
+                const selected = isSelected('achievement', a.type)
+                return (
+                  <button
+                    key={a.type}
+                    onClick={() => onSelect('achievement', a.type)}
+                    className={`flex items-center gap-3 border rounded-xl px-4 py-3 w-full text-left hover:bg-surface2 transition-colors ${selected ? 'border-text/30 bg-surface2' : 'bg-surface border-border'}`}
+                  >
+                    <span className="text-xl flex-shrink-0">{ACHIEVEMENT_EMOJI[code]}</span>
+                    <div>
+                      <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[code]}</p>
+                      <p className="text-xs text-dim">{a.achieved_at.split('T')[0]}</p>
+                    </div>
+                    {selected && <span className="ml-auto text-xs flex-shrink-0">✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        )}
+
+        {/* アーティスト称号 */}
+        {tab === 'artist_achievement' && (
+          artistAchievements.length === 0 ? (
+            <p className="text-dim text-sm text-center py-6">アーティスト称号がありません</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {artistAchievements.map(a => {
+                const code = a.type as ArtistAchievementCode
+                const artistName = (Array.isArray(a.artist) ? a.artist[0]?.name : a.artist?.name) ?? '—'
+                const selected = isSelected('artist_achievement', a.id)
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => onSelect('artist_achievement', a.id)}
+                    className={`flex items-center gap-3 border rounded-xl px-4 py-3 w-full text-left hover:bg-surface2 transition-colors ${selected ? 'border-text/30 bg-surface2' : 'bg-surface border-border'}`}
+                  >
+                    <span className="text-xl flex-shrink-0">{ARTIST_ACHIEVEMENT_EMOJI[code]}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{ARTIST_ACHIEVEMENT_LABELS[code]}</p>
+                      <p className="text-xs text-dim truncate">{artistName}</p>
+                    </div>
+                    {selected && <span className="ml-auto text-xs flex-shrink-0">✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )
         )}
       </div>
     </div>
@@ -178,9 +277,14 @@ function TitlePicker({
 
 // ── メインコンポーネント ──────────────────────────────────────────────────
 
-export default function TitlesClient({ titles: initialTitles, freePoints: initialPoints, achievements, artistAchievements }: Props) {
+export default function TitlesClient({
+  titles: initialTitles, freePoints: initialPoints,
+  achievements, artistAchievements,
+  showcase: initialShowcase,
+}: Props) {
   const [titles, setTitles]         = useState(initialTitles)
   const [freePoints, setFreePoints] = useState(initialPoints)
+  const [showcase, setShowcase]     = useState<ShowcaseRow[]>(initialShowcase)
   const [input, setInput]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState('')
@@ -189,43 +293,60 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
   const router = useRouter()
 
   const pts = parseInt(input) || 0
-
   const previewShape    = pts >= 1 && pts <= 999999 ? getShape(pts) : null
   const previewPos      = previewShape ? getColorPosition(pts) : 0
   const previewColor    = previewShape ? positionToColor(previewPos) : ''
   const sameShapeOwned  = previewShape ? titles.filter(t => getShape(t.points_spent) === previewShape).length : 0
   const canBuy          = previewShape && pts <= freePoints && sameShapeOwned < MAX_PER_SHAPE
 
-  const shapeOrder = SHAPE_RANGES.map(r => r.shape)
-  const grouped = shapeOrder
-    .map(shape => ({ shape, items: titles.filter(t => getShape(t.points_spent) === shape) }))
-    .filter(g => g.items.length > 0)
+  // ショーケーススロットの解決
+  const resolvedSlots: ResolvedSlot[] = [1, 2, 3].map(slot => {
+    const row = showcase.find(s => s.slot === slot)
+    if (!row) return null
+    if (row.kind === 'title') {
+      const title = titles.find(t => t.id === row.ref)
+      return title ? { kind: 'title', title } : null
+    }
+    if (row.kind === 'achievement') {
+      const ach = achievements.find(a => a.type === row.ref)
+      return ach ? { kind: 'achievement', ach } : null
+    }
+    if (row.kind === 'artist_achievement') {
+      const ach = artistAchievements.find(a => a.id === row.ref)
+      return ach ? { kind: 'artist_achievement', ach } : null
+    }
+    return null
+  })
 
-  // ショーケース: スロット1〜3
-  const showcaseSlots = [1, 2, 3].map(slot =>
-    titles.find(t => t.showcase_order === slot) ?? null
-  )
+  const pickerCurrent = pickerSlot !== null ? (showcase.find(s => s.slot === pickerSlot) ?? null) : null
 
-  async function handleSetShowcase(titleId: string, slot: number) {
-    const res = await fetch(`/api/titles/${titleId}`, {
-      method: 'PATCH',
+  async function handleSetShowcase(slot: number, kind: string, ref: string) {
+    const res = await fetch('/api/showcase', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ showcase_order: slot }),
+      body: JSON.stringify({ slot, kind, ref }),
     })
     if (res.ok) {
-      setTitles(prev => prev.map(t => {
-        if (t.showcase_order === slot && t.id !== titleId) return { ...t, showcase_order: null }
-        if (t.id === titleId) return { ...t, showcase_order: slot }
-        return t
-      }))
+      setShowcase(prev => [...prev.filter(s => s.slot !== slot), { slot, kind, ref }])
     }
     setPickerSlot(null)
   }
 
+  async function handleRemoveShowcase(slot: number) {
+    const res = await fetch('/api/showcase', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot }),
+    })
+    if (res.ok) {
+      setShowcase(prev => prev.filter(s => s.slot !== slot))
+    }
+  }
+
   async function handleShare() {
     const showcased = [1, 2, 3]
-      .map(slot => titles.find(t => t.showcase_order === slot))
-      .filter(Boolean) as Title[]
+      .map(slot => showcase.find(s => s.slot === slot))
+      .filter(Boolean) as ShowcaseRow[]
 
     if (showcased.length === 0) {
       setShareMsg('称号をスロットにセットしてからシェアしてください')
@@ -233,36 +354,38 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
       return
     }
 
-    const titleText = showcased
-      .map(t => `${SHAPE_EMOJI[getShape(t.points_spent)]} ${getShape(t.points_spent)}（${t.points_spent.toLocaleString()}pt）`)
-      .join(' / ')
-    const text = `称号コレクション\n${titleText}`
-    const url  = 'https://artist-index.vercel.app/'
+    const lines = showcased.map(s => {
+      if (s.kind === 'title') {
+        const title = titles.find(t => t.id === s.ref)
+        if (!title) return null
+        return `${SHAPE_EMOJI[getShape(title.points_spent)]} ${getShape(title.points_spent)}（${title.points_spent.toLocaleString()}pt）`
+      }
+      if (s.kind === 'achievement') {
+        const code = s.ref as AchievementCode
+        return `${ACHIEVEMENT_EMOJI[code]} ${ACHIEVEMENT_LABELS[code]}`
+      }
+      if (s.kind === 'artist_achievement') {
+        const ach = artistAchievements.find(a => a.id === s.ref)
+        if (!ach) return null
+        const code = ach.type as ArtistAchievementCode
+        const artistName = (Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'
+        return `${ARTIST_ACHIEVEMENT_EMOJI[code]} ${ARTIST_ACHIEVEMENT_LABELS[code]} [${artistName}]`
+      }
+      return null
+    }).filter(Boolean).join(' / ')
+
+    const text = `称号コレクション\n${lines}`
+    const url = 'https://artist-index.vercel.app/'
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: 'artistIndex 称号', text, url })
         setShareMsg('シェアしました')
-      } catch {
-        // キャンセルは無視
-      }
+      } catch { /* キャンセルは無視 */ }
     } else {
-      // フォールバック: Xに投稿
-      const xUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(text + '\n' + url)}`
-      window.open(xUrl, '_blank', 'noopener')
+      window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text + '\n' + url)}`, '_blank', 'noopener')
     }
     setTimeout(() => setShareMsg(''), 3000)
-  }
-
-  async function handleRemoveShowcase(titleId: string) {
-    const res = await fetch(`/api/titles/${titleId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ showcase_order: null }),
-    })
-    if (res.ok) {
-      setTitles(prev => prev.map(t => t.id === titleId ? { ...t, showcase_order: null } : t))
-    }
   }
 
   async function handleBuy() {
@@ -276,7 +399,7 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
     })
     const data = await res.json()
     if (res.ok) {
-      setTitles(prev => [{ ...data, showcase_order: null }, ...prev])
+      setTitles(prev => [{ ...data }, ...prev])
       setFreePoints(p => p - pts)
       setInput('')
       router.refresh()
@@ -291,13 +414,10 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
     const res = await fetch(`/api/titles/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setTitles(prev => prev.filter(t => t.id !== id))
+      setShowcase(prev => prev.filter(s => !(s.kind === 'title' && s.ref === id)))
       router.refresh()
     }
   }
-
-  const pickerCurrentId = pickerSlot !== null
-    ? (titles.find(t => t.showcase_order === pickerSlot)?.id ?? null)
-    : null
 
   return (
     <div>
@@ -319,13 +439,13 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {showcaseSlots.map((title, i) => (
+          {resolvedSlots.map((resolved, i) => (
             <ShowcaseSlot
               key={i}
               slot={i + 1}
-              title={title}
+              resolved={resolved}
               onClick={() => setPickerSlot(i + 1)}
-              onRemove={() => title && handleRemoveShowcase(title.id)}
+              onRemove={() => handleRemoveShowcase(i + 1)}
             />
           ))}
         </div>
@@ -394,7 +514,6 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
 
       {/* アーティスト称号 */}
       {(() => {
-        // 常時チラ見せする称号（未達成でもグレー表示）
         const TEASER = new Set<ArtistAchievementCode>(['digger', 'pioneer', 'holder_1m', 'holder_3m'])
         const ALL_CODES: ArtistAchievementCode[] = [
           'ultra_watcher', 'watcher', 'digger', 'pioneer',
@@ -404,7 +523,6 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
         const rows = ALL_CODES.flatMap(code => {
           const achieved = artistAchievements.filter(a => a.type === code)
           if (achieved.length > 0) {
-            // 達成済み: アーティスト名と日付を表示
             return achieved.map((ach, i) => {
               const artistName = (Array.isArray(ach.artist) ? ach.artist[0]?.name : ach.artist?.name) ?? '—'
               return (
@@ -419,7 +537,6 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
               )
             })
           }
-          // 未達成: テーザー対象のみグレー表示、それ以外は非表示
           if (!TEASER.has(code)) return []
           return [(
             <div key={code} className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3 opacity-40">
@@ -443,18 +560,13 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
       {/* 実績称号 */}
       <div className="mb-8">
         <h2 className="text-sm font-semibold mb-4">実績称号</h2>
-
-        {/* バガー系 */}
         <div className="mb-4">
           <p className="text-xs text-dim font-medium mb-2">📈 バガー（売却利益率）</p>
           <div className="grid grid-cols-2 gap-2">
             {BAGGER_THRESHOLDS.map(b => {
               const achieved = achievements.find(a => a.type === b.code)
               return (
-                <div
-                  key={b.code}
-                  className={`rounded-xl border p-3 ${achieved ? 'border-orange-200 bg-orange-50' : 'border-border opacity-40'}`}
-                >
+                <div key={b.code} className={`rounded-xl border p-3 ${achieved ? 'border-orange-200 bg-orange-50' : 'border-border opacity-40'}`}>
                   <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[b.code]}</p>
                   <p className="text-xs text-dim mt-0.5">
                     {achieved ? achieved.achieved_at.split('T')[0] : `+${Math.round((b.multiplier - 1) * 100)}%以上で売却`}
@@ -464,18 +576,13 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
             })}
           </div>
         </div>
-
-        {/* 規模系 */}
         <div>
           <p className="text-xs text-dim font-medium mb-2">💰 規模（1回の購入額）</p>
           <div className="grid grid-cols-2 gap-2">
             {SCALE_THRESHOLDS.map(s => {
               const achieved = achievements.find(a => a.type === s.code)
               return (
-                <div
-                  key={s.code}
-                  className={`rounded-xl border p-3 ${achieved ? 'border-text/20 bg-surface2' : 'border-border opacity-40'}`}
-                >
+                <div key={s.code} className={`rounded-xl border p-3 ${achieved ? 'border-text/20 bg-surface2' : 'border-border opacity-40'}`}>
                   <p className="text-sm font-medium">{ACHIEVEMENT_LABELS[s.code]}</p>
                   <p className="text-xs text-dim mt-0.5">
                     {achieved ? achieved.achieved_at.split('T')[0] : `${s.minPoints.toLocaleString()}pt以上を購入`}
@@ -491,8 +598,11 @@ export default function TitlesClient({ titles: initialTitles, freePoints: initia
       {pickerSlot !== null && (
         <TitlePicker
           titles={titles}
-          currentId={pickerCurrentId}
-          onSelect={t => handleSetShowcase(t.id, pickerSlot)}
+          achievements={achievements}
+          artistAchievements={artistAchievements}
+          currentKind={pickerCurrent?.kind ?? null}
+          currentRef={pickerCurrent?.ref ?? null}
+          onSelect={(kind, ref) => handleSetShowcase(pickerSlot, kind, ref)}
           onClose={() => setPickerSlot(null)}
         />
       )}

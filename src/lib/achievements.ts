@@ -82,6 +82,18 @@ export const HOLDER_THRESHOLDS: { code: ArtistAchievementCode; minDays: number }
   { code: 'holder_1y', minDays: 365 },
 ]
 
+/** 内部コード → 絵文字（ショーケースコンパクト表示用） */
+export const ACHIEVEMENT_EMOJI: Record<AchievementCode, string> = {
+  half_bagger:   '🥳',
+  double_bagger: '🥳',
+  triple_bagger: '🥳',
+  ten_bagger:    '🥳',
+  investor:      '💰',
+  big_investor:  '💎',
+  rich:          '👑',
+  whale:         '🐋',
+}
+
 /** 内部コード → 達成条件テキスト（未達成時の表示用） */
 export const ARTIST_ACHIEVEMENT_CONDITIONS: Record<ArtistAchievementCode, string> = {
   ultra_watcher: '公開から1日以内に購入',

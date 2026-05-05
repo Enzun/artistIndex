@@ -9,15 +9,16 @@ export default async function TitlesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // 並列フェッチ: プロフィール・購入称号・グローバル実績・保有中投資
-  const [{ data: profile }, { data: titles }, { data: achievements }, { data: activeInvs }] =
+  // 並列フェッチ
+  const [{ data: profile }, { data: titles }, { data: achievements }, { data: activeInvs }, { data: showcase }] =
     await Promise.all([
       supabase.from('users').select('free_points').eq('id', user.id).single(),
-      supabase.from('titles').select('id, points_spent, created_at, showcase_order')
+      supabase.from('titles').select('id, points_spent, created_at')
         .eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('user_achievements').select('type, achieved_at').eq('user_id', user.id),
       supabase.from('investments').select('artist_id, created_at')
         .eq('user_id', user.id).eq('status', 'active'),
+      supabase.from('user_showcase').select('slot, kind, ref').eq('user_id', user.id),
     ])
 
   // 長期保有マイルストーンを確認してサイレントグラント（ignoreDuplicatesで重複は無視）
@@ -40,10 +41,10 @@ export default async function TitlesPage() {
       .upsert(holderGrants, { onConflict: 'user_id,artist_id,type', ignoreDuplicates: true })
   }
 
-  // アーティスト別実績称号を取得（長期保有グラント後に実行）
+  // アーティスト別実績称号を取得（id付き・長期保有グラント後に実行）
   const { data: artistAchievements } = await supabase
     .from('user_artist_achievements')
-    .select('type, achieved_at, artist_id, artist:artists(name)')
+    .select('id, type, achieved_at, artist_id, artist:artists(name)')
     .eq('user_id', user.id)
     .order('achieved_at', { ascending: false })
 
@@ -60,6 +61,7 @@ export default async function TitlesPage() {
         freePoints={profile?.free_points ?? 0}
         achievements={achievements ?? []}
         artistAchievements={artistAchievements ?? []}
+        showcase={showcase ?? []}
       />
     </div>
   )
