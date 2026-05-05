@@ -161,7 +161,9 @@ export default function HomeHero({
   const sortedAll = [...artists].sort(
     (a, b) => getScore(b, histories[b.id] ?? [], rankType) - getScore(a, histories[a.id] ?? [], rankType)
   )
-  const filtered = query.trim()
+  const filtered = isPreview
+    ? sortedAll.slice(0, 7)
+    : query.trim()
     ? sortedAll.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
     : sortedAll
 

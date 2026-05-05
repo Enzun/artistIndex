@@ -79,10 +79,11 @@ export default function IndexChart({ snapshots }: { snapshots: Snapshot[] }) {
   const yMax = Math.ceil(maxVal + pad)
 
   const tickCount = Math.min(6, data.length)
-  const step = Math.floor((data.length - 1) / Math.max(tickCount - 1, 1))
-  const xTicks = Array.from({ length: tickCount }, (_, i) =>
-    data[Math.min(i * step, data.length - 1)].date,
-  )
+  const xTicks = Array.from({ length: tickCount }, (_, i) => {
+    if (i === tickCount - 1) return data[data.length - 1].date
+    const idx = Math.round(i * (data.length - 1) / (tickCount - 1))
+    return data[idx].date
+  })
 
   // 選択可能な期間ボタン（データが足りない期間はdim表示）
   const availableDays = allData.length > 0

@@ -10,7 +10,6 @@ export default async function PreviewPage() {
     .select('id, name, thumbnail_url, current_index')
     .eq('status', 'active')
     .order('current_index', { ascending: false })
-    .limit(7)
 
   const list = artists ?? []
 
