@@ -99,8 +99,9 @@ export default function HomeHero({
   histories: Record<string, number[]>
   isPreview?: boolean
 }) {
-  const [rankType, setRankType]   = useState<RankType>('index')
-  const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, 'index'))
+  const initialRank: RankType = isPreview ? 'daily' : 'index'
+  const [rankType, setRankType]   = useState<RankType>(initialRank)
+  const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, initialRank))
   const [selectedId, setSelectedId] = useState<string | null>(heroList[0]?.id ?? null)
   const [phase, setPhase]         = useState<Phase>('visible')
   const [query, setQuery]         = useState('')
@@ -252,6 +253,7 @@ export default function HomeHero({
                     {Math.floor(latest).toLocaleString()}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-xs text-dim">前日比</span>
                     <span className={`text-xs font-medium tabular-nums ${rising ? 'text-green-500' : 'text-red-400'}`}>
                       {rising ? '▲' : '▼'}
                       {changePct !== null ? ` ${Math.abs(changePct).toFixed(2)}%` : ' —'}
@@ -261,7 +263,6 @@ export default function HomeHero({
                         </span>
                       )}
                     </span>
-                    <span className="text-xs text-dim">前日比</span>
                   </div>
                 </div>
               </div>
