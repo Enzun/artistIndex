@@ -93,9 +93,11 @@ function MiniSparkline({ values }: { values: number[] }) {
 export default function HomeHero({
   artists,
   histories,
+  isPreview = false,
 }: {
   artists: Artist[]
   histories: Record<string, number[]>
+  isPreview?: boolean
 }) {
   const [rankType, setRankType]   = useState<RankType>('index')
   const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, 'index'))
@@ -282,14 +284,19 @@ export default function HomeHero({
       {/* ── 検索 + 一覧 ── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">アーティスト一覧</h2>
-          <input
-            type="text"
-            placeholder="名前で検索..."
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            className="bg-white border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-dim transition-colors w-44"
-          />
+          <div>
+            <h2 className="text-sm font-semibold">アーティスト一覧</h2>
+            {isPreview && <p className="text-xs text-dim mt-0.5">🔒 売買するには登録が必要です</p>}
+          </div>
+          {!isPreview && (
+            <input
+              type="text"
+              placeholder="名前で検索..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              className="bg-white border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-dim transition-colors w-44"
+            />
+          )}
         </div>
 
         <div className="bg-surface border border-border rounded-xl overflow-hidden">

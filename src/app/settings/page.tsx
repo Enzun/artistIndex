@@ -4,6 +4,53 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+// ── ヘルプ ────────────────────────────────────────────────────────────────
+
+const HELP_ITEMS = [
+  {
+    q: 'このアプリは何ですか？',
+    a: 'アーティストの「人気指数」をポイントで売買するシミュレーションゲームです。指数が上がれば利益、下がれば損失になります。ポイントはゲーム内通貨で、現実のお金は動きません。',
+  },
+  {
+    q: '指数はどうやって決まりますか？',
+    a: 'YouTubeのチャンネル再生数などをもとに毎日自動で更新されます。再生数が伸びると指数が上がりやすくなります。',
+  },
+  {
+    q: '購入・売却の方法は？',
+    a: 'アーティストページの「購入」フォームから購入できます。売却はポートフォリオページの取引履歴カードにある「売却」ボタンから行えます。',
+  },
+  {
+    q: '称号とは何ですか？',
+    a: '特定の条件を達成すると自動で付与されるバッジです。称号ページで確認・シェアができます。シェア用スロットに最大3つセットして自慢しましょう。',
+  },
+  {
+    q: 'ポイントが足りません',
+    a: '登録時に5,000ptが無料で付与されます。売買で増やすことができます。',
+  },
+]
+
+function HelpAccordion() {
+  const [open, setOpen] = useState<number | null>(null)
+  return (
+    <div className="border border-border rounded-xl overflow-hidden divide-y divide-border">
+      {HELP_ITEMS.map((item, i) => (
+        <div key={i}>
+          <button
+            onClick={() => setOpen(open === i ? null : i)}
+            className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-surface2/50 transition-colors"
+          >
+            <span className="text-sm font-medium">{item.q}</span>
+            <span className="text-dim text-xs ml-3 flex-shrink-0">{open === i ? '▲' : '▼'}</span>
+          </button>
+          {open === i && (
+            <div className="px-4 pb-4 text-xs text-dim leading-relaxed">{item.a}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function DangerSection({
   title,
   description,
@@ -123,6 +170,11 @@ export default function SettingsPage() {
   return (
     <div className="max-w-lg">
       <h1 className="text-xl font-bold mb-8">設定</h1>
+
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-dim uppercase tracking-wide mb-4">ヘルプ</h2>
+        <HelpAccordion />
+      </section>
 
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-dim uppercase tracking-wide mb-4">アカウント</h2>
