@@ -42,6 +42,7 @@ export default function AdminArtistList({
 }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
+  const [onlyCollecting, setOnlyCollecting] = useState(false)
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [saving, setSaving] = useState(false)
   const [activating, setActivating] = useState<string | null>(null)
@@ -68,9 +69,11 @@ export default function AdminArtistList({
     }
   }
 
-  const filtered = query.trim()
-    ? artists.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
-    : artists
+  const filtered = artists.filter(a => {
+    if (onlyCollecting && a.status !== 'collecting') return false
+    if (query.trim() && !a.name.toLowerCase().includes(query.toLowerCase())) return false
+    return true
+  })
 
   function startEdit(artistId: string, current: string | null) {
     setEditing({ artistId, field: 'wikipedia', value: current ?? '' })
@@ -109,7 +112,19 @@ export default function AdminArtistList({
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold">アーティスト一覧</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold">アーティスト一覧</h2>
+          <button
+            onClick={() => setOnlyCollecting(v => !v)}
+            className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+              onlyCollecting
+                ? 'bg-yellow-100 border-yellow-400 text-yellow-700'
+                : 'border-border text-dim hover:text-text'
+            }`}
+          >
+            非公開のみ
+          </button>
+        </div>
         <input
           type="text"
           placeholder="名前で検索..."
