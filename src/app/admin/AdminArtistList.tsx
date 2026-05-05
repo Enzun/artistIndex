@@ -44,8 +44,29 @@ export default function AdminArtistList({
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [saving, setSaving] = useState(false)
+  const [activating, setActivating] = useState<string | null>(null)
+  const [activateError, setActivateError] = useState<{ id: string; msg: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const cancelRef = useRef(false)
+
+  async function handleQuickActivate(artistId: string, name: string) {
+    if (!confirm(`「${name}」を公開しますか？`)) return
+    setActivating(artistId)
+    setActivateError(null)
+    try {
+      const res = await fetch(`/api/admin/activate/${artistId}`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        router.refresh()
+      } else {
+        setActivateError({ id: artistId, msg: data.error ?? '失敗しました' })
+      }
+    } catch {
+      setActivateError({ id: artistId, msg: '通信エラー' })
+    } finally {
+      setActivating(null)
+    }
+  }
 
   const filtered = query.trim()
     ? artists.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
@@ -128,14 +149,24 @@ export default function AdminArtistList({
                 : '—'
 
               return (
+                <>
                 <tr key={artist.id} className={`border-b border-border last:border-0 ${i % 2 === 0 ? '' : 'bg-surface2/50'}`}>
                   {/* 名前列 */}
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full flex-shrink-0 ${isActive ? 'bg-mga' : 'bg-border'}`}
-                        title={artist.status}
-                      />
+                      {artist.status === 'collecting' ? (
+                        <button
+                          onClick={() => handleQuickActivate(artist.id, artist.name)}
+                          disabled={activating === artist.id}
+                          title="クリックして公開 (active)"
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-border hover:bg-yellow-400 transition-colors disabled:animate-pulse disabled:bg-yellow-300"
+                        />
+                      ) : (
+                        <span
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? 'bg-mga' : 'bg-border'}`}
+                          title={artist.status}
+                        />
+                      )}
                       {artist.thumbnail_url ? (
                         <Image src={artist.thumbnail_url} alt="" width={24} height={24} className="rounded-full flex-shrink-0" />
                       ) : (
@@ -208,6 +239,12 @@ export default function AdminArtistList({
                     {stat ? stat.count.toLocaleString() : 0}
                   </td>
                 </tr>
+                {activateError?.id === artist.id && (
+                  <tr key={`${artist.id}-err`} className="border-b border-border last:border-0">
+                    <td colSpan={5} className="px-4 py-1.5 text-xs text-accent">{activateError.msg}</td>
+                  </tr>
+                )}
+                </>
               )
             })}
             {filtered.length === 0 && (
