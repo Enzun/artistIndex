@@ -22,16 +22,24 @@ const RANK_TABS: { key: RankType; label: string }[] = [
   { key: 'monthly', label: '1ヶ月' },
 ]
 
-function getScore(artist: Artist, hist: number[], type: RankType): number {
+const TODAY_JST = new Date(Date.now() + 9 * 3600_000).toISOString().split('T')[0]
+
+function getPrev(hist: number[], lastSnapDate: string | undefined): number | undefined {
+  // hist は非null indexスナップの昇順配列。今日のスナップがあれば at(-1)=今日、なければ at(-1)=昨日
+  const todayInHist = lastSnapDate === TODAY_JST
+  return todayInHist ? hist.at(-2) : hist.at(-1)
+}
+
+function getScore(artist: Artist, hist: number[], type: RankType, lastSnapDate?: string): number {
   if (type === 'index') return artist.current_index
-  const last  = hist.at(-1) ?? artist.current_index
+  const latest = artist.current_index  // 常に最新値を使用
   if (type === 'daily') {
-    const prev = hist.at(-2)
-    return prev && prev > 0 ? (last - prev) / prev * 100 : 0
+    const prev = getPrev(hist, lastSnapDate)
+    return prev && prev > 0 ? (latest - prev) / prev * 100 : 0
   }
-  // monthly
+  // monthly: 30日前のスナップと比較
   const first = hist[0]
-  return first && first > 0 ? (last - first) / first * 100 : 0
+  return first && first > 0 ? (latest - first) / first * 100 : 0
 }
 
 function rankLabel(score: number, type: RankType): string {
@@ -42,10 +50,11 @@ function rankLabel(score: number, type: RankType): string {
 function getTopArtists(
   artists: Artist[],
   histories: Record<string, number[]>,
+  lastSnapDates: Record<string, string>,
   type: RankType,
 ): Artist[] {
   return [...artists]
-    .sort((a, b) => getScore(b, histories[b.id] ?? [], type) - getScore(a, histories[a.id] ?? [], type))
+    .sort((a, b) => getScore(b, histories[b.id] ?? [], type, lastSnapDates[b.id]) - getScore(a, histories[a.id] ?? [], type, lastSnapDates[a.id]))
     .slice(0, HERO_COUNT)
 }
 
@@ -93,15 +102,17 @@ function MiniSparkline({ values }: { values: number[] }) {
 export default function HomeHero({
   artists,
   histories,
+  lastSnapDates = {},
   isPreview = false,
 }: {
   artists: Artist[]
   histories: Record<string, number[]>
+  lastSnapDates?: Record<string, string>
   isPreview?: boolean
 }) {
   const initialRank: RankType = isPreview ? 'daily' : 'index'
   const [rankType, setRankType]   = useState<RankType>(initialRank)
-  const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, initialRank))
+  const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, lastSnapDates, initialRank))
   const [selectedId, setSelectedId] = useState<string | null>(heroList[0]?.id ?? null)
   const [phase, setPhase]         = useState<Phase>('visible')
   const [query, setQuery]         = useState('')
@@ -114,7 +125,7 @@ export default function HomeHero({
 
     setPhase('exit')
     setTimeout(() => {
-      const newList = getTopArtists(artists, histories, newType)
+      const newList = getTopArtists(artists, histories, lastSnapDates, newType)
       setRankType(newType)
       setHeroList(newList)
       setSelectedId(newList[0]?.id ?? null)
@@ -125,7 +136,7 @@ export default function HomeHero({
         transitioning.current = false
       }, 30)
     }, 220)
-  }, [rankType, artists, histories])
+  }, [rankType, artists, histories, lastSnapDates])
 
   // パネル内アーティスト切り替え（フェード）
   const [panelFading, setPanelFading] = useState(false)
@@ -144,10 +155,10 @@ export default function HomeHero({
   // 選択中アーティスト情報
   const selected = artists.find(a => a.id === selectedId) ?? heroList[0]
   const hist = selected ? (histories[selected.id] ?? []) : []
-  const latest  = hist.at(-1) ?? selected?.current_index ?? 0
-  const prev    = hist.at(-2)
+  const latest  = selected?.current_index ?? 0  // current_index が最新値
+  const prev    = selected ? getPrev(hist, lastSnapDates[selected.id]) : undefined
   const rising  = prev === undefined || latest >= prev
-  const changePct = prev ? ((latest - prev) / prev) * 100 : null
+  const changePct = prev != null && prev > 0 ? ((latest - prev) / prev) * 100 : null
 
   // アイコン行 CSS
   const iconRowClass = [
@@ -160,7 +171,7 @@ export default function HomeHero({
 
   // 検索 + ランキングソート
   const sortedAll = [...artists].sort(
-    (a, b) => getScore(b, histories[b.id] ?? [], rankType) - getScore(a, histories[a.id] ?? [], rankType)
+    (a, b) => getScore(b, histories[b.id] ?? [], rankType, lastSnapDates[b.id]) - getScore(a, histories[a.id] ?? [], rankType, lastSnapDates[a.id])
   )
   const filtered = isPreview
     ? sortedAll.slice(0, 7)
@@ -197,7 +208,7 @@ export default function HomeHero({
         <div className={iconRowClass}>
           {heroList.map((artist, rank) => {
             const isSelected = artist.id === selectedId
-            const score = getScore(artist, histories[artist.id] ?? [], rankType)
+            const score = getScore(artist, histories[artist.id] ?? [], rankType, lastSnapDates[artist.id])
             return (
               <button
                 key={artist.id}
@@ -305,12 +316,12 @@ export default function HomeHero({
         <div className="bg-surface border border-border rounded-xl overflow-hidden">
           {filtered.map((artist, i) => {
             const h    = histories[artist.id] ?? []
-            const val  = h.at(-1) ?? artist.current_index
-            const p    = h.at(-2)
+            const val  = artist.current_index  // 常に最新値
+            const p    = getPrev(h, lastSnapDates[artist.id])
             const up   = p === undefined || val >= p
-            const pct  = p ? ((val - p) / p) * 100 : null
+            const pct  = p != null && p > 0 ? ((val - p) / p) * 100 : null
             const rank = sortedAll.indexOf(artist) + 1
-            const score = getScore(artist, h, rankType)
+            const score = getScore(artist, h, rankType, lastSnapDates[artist.id])
 
             return (
               <Link key={artist.id} href={`/artist/${artist.id}`}>
@@ -335,7 +346,7 @@ export default function HomeHero({
                       </span>
                     )}
                     <span className="text-sm font-bold tabular-nums w-20 text-right">
-                      {Math.floor(val).toLocaleString()}
+                      {Math.floor(artist.current_index).toLocaleString()}
                     </span>
                     <div className={up ? 'text-green-500' : 'text-red-400'}>
                       <MiniSparkline values={h} />

@@ -57,11 +57,17 @@ export default async function ArtistPage({
   const rawIndex = artist.current_index as number
   const displayIndex = Math.floor(rawIndex)
 
-  // 前日比
+  // 前日比：current_index が今日の値、直前スナップが昨日の値になるように選ぶ
+  const todayJST = new Date(Date.now() + 9 * 3600_000).toISOString().split('T')[0]
   const withIndex = (snapshots ?? []).filter(s => s.index_value !== null)
-  const prevIndexValue = withIndex.at(-2)?.index_value as number | undefined
-  const dayChangePt  = prevIndexValue ? Math.floor(rawIndex) - Math.floor(prevIndexValue) : null
-  const dayChangePct = prevIndexValue ? ((rawIndex - prevIndexValue) / prevIndexValue) * 100 : null
+  // 最新スナップが今日なら at(-2) が昨日、今日のスナップがなければ at(-1) が昨日
+  const latestWithIndex = withIndex.at(-1)
+  const prevSnap = latestWithIndex?.snapshot_date === todayJST
+    ? withIndex.at(-2)
+    : latestWithIndex
+  const prevIndexValue = prevSnap?.index_value as number | undefined
+  const dayChangePt  = prevIndexValue != null ? Math.floor(rawIndex) - Math.floor(prevIndexValue) : null
+  const dayChangePct = prevIndexValue != null ? ((rawIndex - prevIndexValue) / prevIndexValue) * 100 : null
 
   // 最新の総再生数
   const latestTotalViews = (snapshots ?? []).at(-1)?.total_views as number ?? 0
