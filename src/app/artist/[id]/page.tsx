@@ -57,15 +57,10 @@ export default async function ArtistPage({
   const rawIndex = artist.current_index as number
   const displayIndex = Math.floor(rawIndex)
 
-  // 前日比：current_index が今日の値、直前スナップが昨日の値になるように選ぶ
-  const todayJST = new Date(Date.now() + 9 * 3600_000).toISOString().split('T')[0]
+  // 前日比：withIndex はindex_value非nullのスナップ昇順
+  // at(-1) が最新計算値（= current_index と一致）、at(-2) が一つ前 → 常にat(-2)でOK
   const withIndex = (snapshots ?? []).filter(s => s.index_value !== null)
-  // 最新スナップが今日なら at(-2) が昨日、今日のスナップがなければ at(-1) が昨日
-  const latestWithIndex = withIndex.at(-1)
-  const prevSnap = latestWithIndex?.snapshot_date === todayJST
-    ? withIndex.at(-2)
-    : latestWithIndex
-  const prevIndexValue = prevSnap?.index_value as number | undefined
+  const prevIndexValue = withIndex.at(-2)?.index_value as number | undefined
   const dayChangePt  = prevIndexValue != null ? Math.floor(rawIndex) - Math.floor(prevIndexValue) : null
   const dayChangePct = prevIndexValue != null ? ((rawIndex - prevIndexValue) / prevIndexValue) * 100 : null
 

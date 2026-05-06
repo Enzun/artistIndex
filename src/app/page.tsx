@@ -31,12 +31,10 @@ export default async function HomePage() {
     .order('snapshot_date', { ascending: true })
 
   const histories: Record<string, number[]> = {}
-  const lastSnapDates: Record<string, string> = {}
   for (const snap of snapshots ?? []) {
     if (!histories[snap.artist_id]) histories[snap.artist_id] = []
     histories[snap.artist_id].push(snap.index_value as number)
-    lastSnapDates[snap.artist_id] = snap.snapshot_date
   }
 
-  return <HomeHero artists={list as { id: string; name: string; thumbnail_url: string | null; current_index: number }[]} histories={histories} lastSnapDates={lastSnapDates} />
+  return <HomeHero artists={list as { id: string; name: string; thumbnail_url: string | null; current_index: number }[]} histories={histories} />
 }

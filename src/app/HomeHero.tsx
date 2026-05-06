@@ -22,19 +22,17 @@ const RANK_TABS: { key: RankType; label: string }[] = [
   { key: 'monthly', label: '1ヶ月' },
 ]
 
-const TODAY_JST = new Date(Date.now() + 9 * 3600_000).toISOString().split('T')[0]
-
-function getPrev(hist: number[], lastSnapDate: string | undefined): number | undefined {
-  // hist は非null indexスナップの昇順配列。今日のスナップがあれば at(-1)=今日、なければ at(-1)=昨日
-  const todayInHist = lastSnapDate === TODAY_JST
-  return todayInHist ? hist.at(-2) : hist.at(-1)
+// hist は index_value 非null のスナップ昇順配列。
+// at(-1) は常に最新計算値 (≒ current_index)、at(-2) がその一つ前 → 常に at(-2) を prev とする
+function getPrev(hist: number[]): number | undefined {
+  return hist.at(-2)
 }
 
-function getScore(artist: Artist, hist: number[], type: RankType, lastSnapDate?: string): number {
+function getScore(artist: Artist, hist: number[], type: RankType): number {
   if (type === 'index') return artist.current_index
   const latest = artist.current_index  // 常に最新値を使用
   if (type === 'daily') {
-    const prev = getPrev(hist, lastSnapDate)
+    const prev = getPrev(hist)
     return prev && prev > 0 ? (latest - prev) / prev * 100 : 0
   }
   // monthly: 30日前のスナップと比較
@@ -50,11 +48,10 @@ function rankLabel(score: number, type: RankType): string {
 function getTopArtists(
   artists: Artist[],
   histories: Record<string, number[]>,
-  lastSnapDates: Record<string, string>,
   type: RankType,
 ): Artist[] {
   return [...artists]
-    .sort((a, b) => getScore(b, histories[b.id] ?? [], type, lastSnapDates[b.id]) - getScore(a, histories[a.id] ?? [], type, lastSnapDates[a.id]))
+    .sort((a, b) => getScore(b, histories[b.id] ?? [], type) - getScore(a, histories[a.id] ?? [], type))
     .slice(0, HERO_COUNT)
 }
 
@@ -102,17 +99,15 @@ function MiniSparkline({ values }: { values: number[] }) {
 export default function HomeHero({
   artists,
   histories,
-  lastSnapDates = {},
   isPreview = false,
 }: {
   artists: Artist[]
   histories: Record<string, number[]>
-  lastSnapDates?: Record<string, string>
   isPreview?: boolean
 }) {
   const initialRank: RankType = isPreview ? 'daily' : 'index'
   const [rankType, setRankType]   = useState<RankType>(initialRank)
-  const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, lastSnapDates, initialRank))
+  const [heroList, setHeroList]   = useState<Artist[]>(() => getTopArtists(artists, histories, initialRank))
   const [selectedId, setSelectedId] = useState<string | null>(heroList[0]?.id ?? null)
   const [phase, setPhase]         = useState<Phase>('visible')
   const [query, setQuery]         = useState('')
@@ -125,7 +120,7 @@ export default function HomeHero({
 
     setPhase('exit')
     setTimeout(() => {
-      const newList = getTopArtists(artists, histories, lastSnapDates, newType)
+      const newList = getTopArtists(artists, histories, newType)
       setRankType(newType)
       setHeroList(newList)
       setSelectedId(newList[0]?.id ?? null)
@@ -136,7 +131,7 @@ export default function HomeHero({
         transitioning.current = false
       }, 30)
     }, 220)
-  }, [rankType, artists, histories, lastSnapDates])
+  }, [rankType, artists, histories])
 
   // パネル内アーティスト切り替え（フェード）
   const [panelFading, setPanelFading] = useState(false)
@@ -156,7 +151,7 @@ export default function HomeHero({
   const selected = artists.find(a => a.id === selectedId) ?? heroList[0]
   const hist = selected ? (histories[selected.id] ?? []) : []
   const latest  = selected?.current_index ?? 0  // current_index が最新値
-  const prev    = selected ? getPrev(hist, lastSnapDates[selected.id]) : undefined
+  const prev    = selected ? getPrev(hist) : undefined
   const rising  = prev === undefined || latest >= prev
   const changePct = prev != null && prev > 0 ? ((latest - prev) / prev) * 100 : null
 
@@ -171,7 +166,7 @@ export default function HomeHero({
 
   // 検索 + ランキングソート
   const sortedAll = [...artists].sort(
-    (a, b) => getScore(b, histories[b.id] ?? [], rankType, lastSnapDates[b.id]) - getScore(a, histories[a.id] ?? [], rankType, lastSnapDates[a.id])
+    (a, b) => getScore(b, histories[b.id] ?? [], rankType) - getScore(a, histories[a.id] ?? [], rankType)
   )
   const filtered = isPreview
     ? sortedAll.slice(0, 7)
@@ -208,7 +203,7 @@ export default function HomeHero({
         <div className={iconRowClass}>
           {heroList.map((artist, rank) => {
             const isSelected = artist.id === selectedId
-            const score = getScore(artist, histories[artist.id] ?? [], rankType, lastSnapDates[artist.id])
+            const score = getScore(artist, histories[artist.id] ?? [], rankType)
             return (
               <button
                 key={artist.id}
@@ -317,11 +312,11 @@ export default function HomeHero({
           {filtered.map((artist, i) => {
             const h    = histories[artist.id] ?? []
             const val  = artist.current_index  // 常に最新値
-            const p    = getPrev(h, lastSnapDates[artist.id])
+            const p    = getPrev(h)
             const up   = p === undefined || val >= p
             const pct  = p != null && p > 0 ? ((val - p) / p) * 100 : null
             const rank = sortedAll.indexOf(artist) + 1
-            const score = getScore(artist, h, rankType, lastSnapDates[artist.id])
+            const score = getScore(artist, h, rankType)
 
             return (
               <Link key={artist.id} href={`/artist/${artist.id}`}>
