@@ -28,13 +28,16 @@ export default async function HomePage() {
     .in('artist_id', artistIds)
     .gte('snapshot_date', thirtyDaysAgo)
     .not('index_value', 'is', null)
-    .order('snapshot_date', { ascending: true })
+    .order('snapshot_date', { ascending: false })
+    .limit(artistIds.length * 35)
 
   const histories: Record<string, number[]> = {}
   for (const snap of snapshots ?? []) {
     if (!histories[snap.artist_id]) histories[snap.artist_id] = []
     histories[snap.artist_id].push(snap.index_value as number)
   }
+  // 降順で取得したため、各アーティストの配列を昇順に戻す
+  for (const id of Object.keys(histories)) histories[id].reverse()
 
   return <HomeHero artists={list as { id: string; name: string; thumbnail_url: string | null; current_index: number }[]} histories={histories} />
 }

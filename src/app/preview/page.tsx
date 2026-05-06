@@ -23,7 +23,8 @@ export default async function PreviewPage() {
         .in('artist_id', artistIds)
         .gte('snapshot_date', thirtyDaysAgo)
         .not('index_value', 'is', null)
-        .order('snapshot_date', { ascending: true })
+        .order('snapshot_date', { ascending: false })
+        .limit(artistIds.length * 35)
     : { data: [] }
 
   const histories: Record<string, number[]> = {}
@@ -31,6 +32,8 @@ export default async function PreviewPage() {
     if (!histories[snap.artist_id]) histories[snap.artist_id] = []
     histories[snap.artist_id].push(snap.index_value as number)
   }
+  // 降順で取得したため、各アーティストの配列を昇順に戻す
+  for (const id of Object.keys(histories)) histories[id].reverse()
 
   return (
     <div>
